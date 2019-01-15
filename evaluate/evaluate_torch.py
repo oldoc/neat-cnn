@@ -12,6 +12,49 @@ import math
 import numpy as np
 
 
+class Block(nn.Module):
+    '''Depthwise conv + Pointwise conv'''
+    def __init__(self, in_planes, out_planes, stride=1):
+        super(Block, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, in_planes, kernel_size=3, stride=stride, padding=1, groups=in_planes, bias=False)
+        self.bn1 = nn.BatchNorm2d(in_planes)
+        self.conv2 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_planes)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = F.relu(self.bn2(self.conv2(out)))
+        return out
+
+
+class MobileNet(nn.Module):
+    # (128,2) means conv planes=128, conv stride=2, by default conv stride=1
+    cfg = [64, (128,2), 128, (256,2), 256, (512,2), 512, 512, 512, 512, 512, (1024,2), 1024]
+
+    def __init__(self, num_classes=10):
+        super(MobileNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.layers = self._make_layers(in_planes=32)
+        self.linear = nn.Linear(1024, num_classes)
+
+    def _make_layers(self, in_planes):
+        layers = []
+        for x in self.cfg:
+            out_planes = x if isinstance(x, int) else x[0]
+            stride = 1 if isinstance(x, int) else x[1]
+            layers.append(Block(in_planes, out_planes, stride))
+            in_planes = out_planes
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layers(out)
+        out = F.avg_pool2d(out, 2)
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        return out
+
 class Net(nn.Module):
 
     def __init__(self, config, genome: neat.genome.DefaultGenome):
@@ -32,8 +75,6 @@ class Net(nn.Module):
 
         self.set_layers(genome)
         self.set_parameters(genome)
-
-
 
     def forward(self, x):
         l = list(self.children())
@@ -64,37 +105,6 @@ class Net(nn.Module):
         x = l[-1](x)
 
         return (x)
-
-    def forward_without_dropout(self, x):
-        l = list(self.children())
-        #print(len(l))
-
-        out_channels_list_counter = 0
-        for i in range(self.num_cnn_layer):
-            x = l[2 * i](x)
-            x = nn.BatchNorm2d(num_features=self.out_channels_list[out_channels_list_counter], affine=True).cuda()(x)
-            out_channels_list_counter += 1
-            x = F.relu(x)
-
-            x = l[2 * i + 1](x)
-            x = nn.BatchNorm2d(num_features=self.out_channels_list[out_channels_list_counter], affine=True).cuda()(x)
-            out_channels_list_counter += 1
-            #x = F.batch_norm(x)
-            x = F.relu(x)
-            if (i % 2 == 1):
-                x = F.max_pool2d(x, 2)
-
-        x = x.view(-1, self.num_flat_features)
-
-        for i in range(self.num_cnn_layer, self.num_layer - 1):
-            x = F.relu(l[i + self.num_cnn_layer](x))
-
-        x = l[-1](x)
-
-        return (x)
-
-    #def activate(self, x):
-    #    return self.forward(x)
 
     def set_layers(self, genome: neat.genome.DefaultGenome):
         #calculate channel for every cnn layers

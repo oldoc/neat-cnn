@@ -30,7 +30,6 @@ class DefaultGenomeConfig(object):
 
         self._params = [ConfigParameter('num_inputs', int),
                         ConfigParameter('num_outputs', int),
-                        ConfigParameter('num_hidden', int),
                         ConfigParameter('feed_forward', bool),
                         ConfigParameter('compatibility_disjoint_coefficient', float),
                         ConfigParameter('compatibility_weight_coefficient', float),
@@ -43,8 +42,11 @@ class DefaultGenomeConfig(object):
                         ConfigParameter('initial_connection', str, 'unconnected'),
                         ConfigParameter('num_layer', int),
                         ConfigParameter('num_cnn_layer', int),
-                        ConfigParameter('num_first_fc_layer_node', int),
+                        ConfigParameter('num_first_layer_channel', int),
                         ConfigParameter('kernal_size', int),
+                        ConfigParameter('input_size', int),
+                        ConfigParameter('init_channel_num', int),
+                        ConfigParameter('num_downsampling', int),
                         ConfigParameter('full_connect_input', bool)]
 
         # Gather configuration data from the gene classes.
@@ -193,16 +195,57 @@ class DefaultGenome(object):
         # Add output layer nodes
         self.layer[-1][1] = set(config.output_keys)
 
+        # Compute node number in every layer.
+        # The layers are arranged in groups.
+        # The middle groups have num_cnn_layer // num_downsampling layers
+        # The first and last group have (num_cnn_layer // num_downsampling) + (num_cnn_layer % num_downsampling) layers.
+        # The first group have one more layer than last group if the total layer is not even.
+        layer_num_in_middle_group = config.num_cnn_layer // config.num_downsampling
+        layer_num_in_last_group = (layer_num_in_middle_group + (config.num_cnn_layer % config.num_downsampling)) // 2
+        layer_num_in_first_group = (layer_num_in_middle_group + (config.num_cnn_layer % config.num_downsampling)) - layer_num_in_last_group
+        group_num = config.num_downsampling + 1
+
+        # Generate node number in each layer.
+        nodes_every_layers = list()
+        for i in range(layer_num_in_first_group):
+            nodes_every_layers.append(config.init_channel_num)
+
+        for i in range(1, group_num - 1):
+            for j in range(layer_num_in_middle_group):
+                nodes_every_layers.append(config.init_channel_num * (2 ** i))
+
+        for i in range(layer_num_in_last_group):
+            nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
+
+        # Generate node number in fc layers.
+        # Note the last layer have been assigned nodes.
+        for i in range(config.num_cnn_layer, config.num_layer - 1):
+            nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
+
+        num_hidden = sum(nodes_every_layers)
+
         # Add hidden nodes if requested.
         hidden_node_key = set()
-        if config.num_hidden > 0:
-            for i in range(config.num_hidden):
+        if num_hidden > 0:
+            for i in range(num_hidden):
                 node_key = config.get_new_node_key(self.nodes)
                 assert node_key not in self.nodes
                 node = self.create_node(config, node_key, -198043)
                 self.nodes[node_key] = node
                 hidden_node_key.add(node_key)
 
+        # Assign nodes to layers.
+        # Note the last layer have been assigned nodes.
+        for i in range(config.num_layer - 1):
+            for j in range(nodes_every_layers[i]):
+                node_key = hidden_node_key.pop()
+                self.layer[i][1].add(node_key)
+                self.nodes[node_key].layer = i
+
+        # Add the last fc layer node number.
+        nodes_every_layers.append(config.num_outputs)
+
+        """
         # Assign nodes to layers, make sure every layer has at least one node
         if (len(hidden_node_key) >= config.num_layer - 1):
             for i in range(config.num_layer - 1):
@@ -221,6 +264,7 @@ class DefaultGenome(object):
                 self.nodes[node_key].layer = config.num_cnn_layer
         else:
             raise RuntimeError("Too less nodes.")
+        
 
         # Assign the left nodes to layers randomly
         while hidden_node_key:
@@ -230,6 +274,7 @@ class DefaultGenome(object):
             node_key = hidden_node_key.pop()
             self.layer[layer_nums][1].add(node_key)
             self.nodes[node_key].layer = layer_nums
+        """
 
         # Add connections based on initial connectivity type.
 
