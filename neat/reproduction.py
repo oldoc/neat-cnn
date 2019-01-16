@@ -46,6 +46,7 @@ class DefaultReproduction(DefaultClassConfig):
             g.configure_new(genome_config)
             new_genomes[key] = g
             self.ancestors[key] = tuple()
+            print("Genome No.{0} initialized.".format(i))
 
         return new_genomes
 

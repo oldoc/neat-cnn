@@ -126,7 +126,6 @@ def eval_genomes(genomes, config):
 
         fit = eval_fitness(net, trainloader, evaluate_batch_size, torch_batch_size, start, gpu)
 
-
         comp = open("comp.csv", "a")
         comp.write('{0},{1:3.3f},'.format(j, fit))
         print('Before: {0}: {1:3.3f}'.format(j, fit))
@@ -174,13 +173,14 @@ def eval_genomes(genomes, config):
                     print('[%d, %4d] loss: %.3f' % (epoch, i + 1, running_loss / (i+1)))
 
             print("Epoch {0:d}, Average loss:{1:.5f}".format(epoch, running_loss / num_loss))
-
+            """
             if ((abs(last_running_loss - running_loss)/num_loss < delta) or
                 (last_running_loss != 0) and (running_loss > last_running_loss)):
                 training = False
                 print("Stop trainning")
                 break;
                 #print(abs(last_running_loss - running_loss))
+            """
             last_running_loss = running_loss
             running_loss = 0.0
             num_loss = 0
@@ -188,7 +188,7 @@ def eval_genomes(genomes, config):
 
         #evaluate the fitness
 
-        net.write_back_parameters(genome)
+        # tmp hereeeeeeeeeeeeeeee! net.write_back_parameters(genome)
 
         evaluate_batch_size = 0
         start = 0

@@ -42,7 +42,6 @@ class DefaultGenomeConfig(object):
                         ConfigParameter('initial_connection', str, 'unconnected'),
                         ConfigParameter('num_layer', int),
                         ConfigParameter('num_cnn_layer', int),
-                        ConfigParameter('num_first_layer_channel', int),
                         ConfigParameter('kernal_size', int),
                         ConfigParameter('input_size', int),
                         ConfigParameter('init_channel_num', int),
@@ -205,24 +204,40 @@ class DefaultGenome(object):
         layer_num_in_first_group = (layer_num_in_middle_group + (config.num_cnn_layer % config.num_downsampling)) - layer_num_in_last_group
         group_num = config.num_downsampling + 1
 
+        # Generate downsampling mask.
+        self.downsampling_mask = [0]*config.num_layer
+        for i in range(layer_num_in_first_group, config.num_cnn_layer):
+            if (i - layer_num_in_first_group) % layer_num_in_middle_group == 0:
+                self.downsampling_mask[i] = 1
+            else:
+                self.downsampling_mask[i] = 0
+
         # Generate node number in each layer.
-        nodes_every_layers = list()
+        self.nodes_every_layers = list()
+        self.nodes_every_layers_cfg = list()
+        self.nodes_every_layers.append(config.num_inputs)
         for i in range(layer_num_in_first_group):
-            nodes_every_layers.append(config.init_channel_num)
+            self.nodes_every_layers.append(config.init_channel_num)
+            self.nodes_every_layers_cfg.append(config.init_channel_num)
 
         for i in range(1, group_num - 1):
             for j in range(layer_num_in_middle_group):
-                nodes_every_layers.append(config.init_channel_num * (2 ** i))
+                self.nodes_every_layers.append(config.init_channel_num * (2 ** i))
+                self.nodes_every_layers_cfg.append(config.init_channel_num * (2 ** i))
 
-        for i in range(layer_num_in_last_group):
-            nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
+        # Note "layer_num_in_last_group - 1"
+        for i in range(layer_num_in_last_group - 1):
+            self.nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
+            self.nodes_every_layers_cfg.append(config.init_channel_num * (2 ** config.num_downsampling))
+        self.nodes_every_layers_cfg.append(config.init_channel_num * (2 ** config.num_downsampling))
 
         # Generate node number in fc layers.
         # Note the last layer have been assigned nodes.
         for i in range(config.num_cnn_layer, config.num_layer - 1):
-            nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
+            self.nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
+            self.nodes_every_layers_cfg.append(config.init_channel_num * (2 ** config.num_downsampling))
 
-        num_hidden = sum(nodes_every_layers)
+        num_hidden = sum(self.nodes_every_layers)
 
         # Add hidden nodes if requested.
         hidden_node_key = set()
@@ -237,13 +252,14 @@ class DefaultGenome(object):
         # Assign nodes to layers.
         # Note the last layer have been assigned nodes.
         for i in range(config.num_layer - 1):
-            for j in range(nodes_every_layers[i]):
+            for j in range(self.nodes_every_layers[i]):
                 node_key = hidden_node_key.pop()
                 self.layer[i][1].add(node_key)
                 self.nodes[node_key].layer = i
 
         # Add the last fc layer node number.
-        nodes_every_layers.append(config.num_outputs)
+        self.nodes_every_layers.append(config.num_outputs)
+        self.nodes_every_layers_cfg.append(config.num_outputs)
 
         """
         # Assign nodes to layers, make sure every layer has at least one node
