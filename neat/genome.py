@@ -167,7 +167,7 @@ class DefaultGenome(object):
     def write_config(cls, f, config):
         config.save(f)
 
-    def __init__(self, key):
+    def __init__(self, key, config):
         # Unique identifier for a genome instance.
         self.key = key
 
@@ -177,6 +177,35 @@ class DefaultGenome(object):
         self.layer = []
         self.downsampling_mask = []
         self.nodes_every_layers = []
+
+        # Compute node number in every layer.
+        assert config.num_cnn_layer >= config.num_downsampling
+
+        if config.num_cnn_layer == config.num_downsampling:
+            self.layer_num_in_middle_group = 1
+            self.layer_num_in_last_group = 1
+            self.layer_num_in_first_group = 1
+            self.group_num = config.num_downsampling
+            self.downsampling_mask = [0] * config.num_layer
+            for i in range(config.num_cnn_layer):
+                self.downsampling_mask[i] = 1
+        else:
+            # The layers are arranged in groups.
+            # The middle groups have num_cnn_layer // num_downsampling layers
+            # The first and last group have (num_cnn_layer // num_downsampling) + (num_cnn_layer % num_downsampling) layers.
+            # The first group have one more layer than last group if the total layer is not even.
+            self.layer_num_in_middle_group = config.num_cnn_layer // config.num_downsampling
+            self.layer_num_in_last_group = (self.layer_num_in_middle_group + (config.num_cnn_layer % config.num_downsampling)) // 2
+            self.layer_num_in_first_group = (self.layer_num_in_middle_group + (config.num_cnn_layer % config.num_downsampling)) - self.layer_num_in_last_group
+            self.group_num = config.num_downsampling + 1
+
+            # Generate downsampling mask.
+            self.downsampling_mask = [0] * config.num_layer
+            for i in range(self.layer_num_in_first_group, (config.num_cnn_layer - (self.layer_num_in_last_group - 1))):
+                if (i - self.layer_num_in_first_group) % self.layer_num_in_middle_group == 0:
+                    self.downsampling_mask[i] = 1
+                else:
+                    self.downsampling_mask[i] = 0
 
         # Fitness results.
         self.fitness = None
@@ -196,35 +225,19 @@ class DefaultGenome(object):
         # Add output layer nodes
         self.layer[-1][1] = set(config.output_keys)
 
-        # Compute node number in every layer.
-        # The layers are arranged in groups.
-        # The middle groups have num_cnn_layer // num_downsampling layers
-        # The first and last group have (num_cnn_layer // num_downsampling) + (num_cnn_layer % num_downsampling) layers.
-        # The first group have one more layer than last group if the total layer is not even.
-        layer_num_in_middle_group = config.num_cnn_layer // config.num_downsampling
-        layer_num_in_last_group = (layer_num_in_middle_group + (config.num_cnn_layer % config.num_downsampling)) // 2
-        layer_num_in_first_group = (layer_num_in_middle_group + (config.num_cnn_layer % config.num_downsampling)) - layer_num_in_last_group
-        group_num = config.num_downsampling + 1
-
-        # Generate downsampling mask.
-        self.downsampling_mask = [0]*config.num_layer
-        for i in range(layer_num_in_first_group, config.num_cnn_layer):
-            if (i - layer_num_in_first_group) % layer_num_in_middle_group == 0:
-                self.downsampling_mask[i] = 1
-            else:
-                self.downsampling_mask[i] = 0
 
         # Generate node number in each layer.
-        self.nodes_every_layers.append(config.num_inputs)
-        for i in range(layer_num_in_first_group):
+        # self.nodes_every_layers.append(config.num_inputs)
+        for i in range(self.layer_num_in_first_group):
             self.nodes_every_layers.append(config.init_channel_num)
 
-        for i in range(1, group_num - 1):
-            for j in range(layer_num_in_middle_group):
+        for i in range(1, self.group_num - 1):
+            for j in range(self.layer_num_in_middle_group):
                 self.nodes_every_layers.append(config.init_channel_num * (2 ** i))
 
         # Note "layer_num_in_last_group - 1"
-        for i in range(layer_num_in_last_group - 1):
+        #for i in range(self.layer_num_in_last_group - 1):
+        for i in range(self.layer_num_in_last_group):
             self.nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
 
         # Generate node number in fc layers.
@@ -433,6 +446,11 @@ class DefaultGenome(object):
         for node in iteritems(self.nodes):
             self.layer[node[1].layer][1].add(node[1].key)
 
+        # Compute node num in every layer
+        self.nodes_every_layers = [0] * config.num_layer
+        for i in range(config.num_layer):
+            self.nodes_every_layers[i] = len(self.layer[i][1])
+
     def mutate(self, config): 
         """ Mutates this genome. """
 
@@ -477,10 +495,11 @@ class DefaultGenome(object):
     # Note: The node cannot be added to the last layer!
     def mutate_add_node(self, config):
 
-        # Choose the layer to add node (not the last layer and the first fc layer)
-        layer_num = randint(0, config.num_layer - 2)
-        while (layer_num == config.num_cnn_layer):
-            layer_num = randint(0, config.num_layer - 2)
+        # Choose the layer to add node (not the last layer)
+        layer_num = randint(0, config.num_layer - 1)
+
+        # Revise the nodes_every_layers list
+        self.nodes_every_layers[layer_num] += 1
 
         new_node_id = config.get_new_node_key(self.nodes)
         ng = self.create_node(config, new_node_id, layer_num)
@@ -631,8 +650,8 @@ class DefaultGenome(object):
         del_key = choice(available_nodes)
 
         # Cannot delete node in the first fc layer
-        if self.nodes[del_key].layer == config.num_cnn_layer:
-            return -1
+        #if self.nodes[del_key].layer == config.num_cnn_layer:
+        #    return -1
 
         # If there is only one node
         if len(self.layer[self.nodes[del_key].layer][1]) <= 1:
@@ -646,8 +665,10 @@ class DefaultGenome(object):
         for key in connections_to_delete:
             del self.connections[key]
 
-        i = self.nodes[del_key].layer
         self.layer[self.nodes[del_key].layer][1].remove(del_key)
+
+        # Revise the nodes_every_layers list
+        self.nodes_every_layers[self.nodes[del_key].layer] -= 1
 
         del self.nodes[del_key]
 
