@@ -25,6 +25,8 @@ torch_batch_size = 128
 
 gpu = False
 
+first_time = True
+
 #net_dict = {}
 
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
@@ -100,6 +102,8 @@ def eval_genomes(genomes, config):
     lr = float(tmp)
     tmp = lrfile.readline().rstrip('\n')
     delta = float(tmp)
+    tmp = lrfile.readline().rstrip('\n')
+    max_epoch = int(tmp)
     lrfile.close()
 
     #genomes_id_set = set()
@@ -112,7 +116,11 @@ def eval_genomes(genomes, config):
         #if genome_id in net_dict:
         #    net = net_dict[genome_id]
         #else:
-        net = evaluate_torch.Net(config, genome)
+
+        if first_time:
+            net = evaluate_torch.Net(config, genome, False)
+        else:
+            net = evaluate_torch.Net(config, genome, True)
 
         if gpu:
             net.cuda()
@@ -140,7 +148,7 @@ def eval_genomes(genomes, config):
         num_loss = 0
         last_running_loss = 0.0
         training = True
-        train_epoch = 40
+        train_epoch = max_epoch
         while training and epoch < train_epoch:  # loop over the dataset multiple times
         #for epoch in range(10):
             epoch += 1
@@ -170,25 +178,50 @@ def eval_genomes(genomes, config):
 
                 # print statistics
                 if i % 50 == 49:  # print every 200 mini-batches
-                    print('[%d, %4d] loss: %.3f' % (epoch, i + 1, running_loss / (i+1)))
+                    print('[%d, %4d] loss: %.3f' % (epoch, i + 1, running_loss / i))
 
             print("Epoch {0:d}, Average loss:{1:.5f}".format(epoch, running_loss / num_loss))
-            """
-            if ((abs(last_running_loss - running_loss)/num_loss < delta) or
-                (last_running_loss != 0) and (running_loss > last_running_loss)):
-                training = False
-                print("Stop trainning")
-                break;
+            if (delta > 0):
+                if ((abs(last_running_loss - running_loss)/num_loss < delta) or
+                    (last_running_loss != 0) and (running_loss > last_running_loss)):
+                    training = False
+                    print("Stop trainning")
+                    break;
                 #print(abs(last_running_loss - running_loss))
-            """
+
             last_running_loss = running_loss
             running_loss = 0.0
             num_loss = 0
+
+            # print precision every 10 epoch
+            if epoch % 10 == 9:
+                evaluate_batch_size = 0
+                start = 0
+                fitness_evaluate = eval_fitness(net, trainloader, evaluate_batch_size, torch_batch_size, start, gpu)
+
+                test_batch_size = 0
+                start = 0
+                fitness_test = eval_fitness(net, testloader, test_batch_size, torch_batch_size, start, gpu)
+
+                genome.fitness = fitness_evaluate
+                print('Epoch {3:d}: {0:3.3f}, {1:3.3f}, {2}'.format(fitness_evaluate, fitness_test, genome_id, epoch))
+
+            # reload run parameters
+            lrfile = open("lr.txt", "r")
+            tmp = lrfile.readline().rstrip('\n')
+            lr = float(tmp)
+            tmp = lrfile.readline().rstrip('\n')
+            delta = float(tmp)
+            tmp = lrfile.readline().rstrip('\n')
+            max_epoch = int(tmp)
+            train_epoch = int(tmp)
+            lrfile.close()
+
         print('Finished Training')
 
         #evaluate the fitness
 
-        # tmp hereeeeeeeeeeeeeeee! net.write_back_parameters(genome)
+        net.write_back_parameters(genome)
 
         evaluate_batch_size = 0
         start = 0

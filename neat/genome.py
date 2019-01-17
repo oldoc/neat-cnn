@@ -175,6 +175,8 @@ class DefaultGenome(object):
         self.connections = {}
         self.nodes = {}
         self.layer = []
+        self.downsampling_mask = []
+        self.nodes_every_layers = []
 
         # Fitness results.
         self.fitness = None
@@ -212,6 +214,48 @@ class DefaultGenome(object):
             else:
                 self.downsampling_mask[i] = 0
 
+        # Generate node number in each layer.
+        self.nodes_every_layers.append(config.num_inputs)
+        for i in range(layer_num_in_first_group):
+            self.nodes_every_layers.append(config.init_channel_num)
+
+        for i in range(1, group_num - 1):
+            for j in range(layer_num_in_middle_group):
+                self.nodes_every_layers.append(config.init_channel_num * (2 ** i))
+
+        # Note "layer_num_in_last_group - 1"
+        for i in range(layer_num_in_last_group - 1):
+            self.nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
+
+        # Generate node number in fc layers.
+        # Note the last layer have been assigned nodes.
+        for i in range(config.num_cnn_layer, config.num_layer - 1):
+            self.nodes_every_layers.append(config.init_channel_num * (2 ** config.num_downsampling))
+
+        num_hidden = sum(self.nodes_every_layers)
+
+        # Add hidden nodes if requested.
+        hidden_node_key = set()
+        if num_hidden > 0:
+            for i in range(num_hidden):
+                node_key = config.get_new_node_key(self.nodes)
+                assert node_key not in self.nodes
+                node = self.create_node(config, node_key, -198043)
+                self.nodes[node_key] = node
+                hidden_node_key.add(node_key)
+
+        # Assign nodes to layers.
+        # Note the last layer have been assigned nodes.
+        for i in range(config.num_layer - 1):
+            for j in range(self.nodes_every_layers[i]):
+                node_key = hidden_node_key.pop()
+                self.layer[i][1].add(node_key)
+                self.nodes[node_key].layer = i
+
+        # Add the last fc layer node number.
+        self.nodes_every_layers.append(config.num_outputs)
+
+        """
         # Generate node number in each layer.
         self.nodes_every_layers = list()
         self.nodes_every_layers_cfg = list()
@@ -260,7 +304,7 @@ class DefaultGenome(object):
         # Add the last fc layer node number.
         self.nodes_every_layers.append(config.num_outputs)
         self.nodes_every_layers_cfg.append(config.num_outputs)
-
+        """
         """
         # Assign nodes to layers, make sure every layer has at least one node
         if (len(hidden_node_key) >= config.num_layer - 1):
@@ -347,6 +391,7 @@ class DefaultGenome(object):
 
     def configure_crossover(self, genome1, genome2, config):
         """ Configure a new genome by crossover from two parent genomes. """
+
         assert isinstance(genome1.fitness, (int, float))
         assert isinstance(genome2.fitness, (int, float))
         if genome1.fitness > genome2.fitness:

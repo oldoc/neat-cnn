@@ -2,7 +2,7 @@
 
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 0.98
+fitness_threshold     = 0.97
 pop_size              = 8
 reset_on_extinction   = False
 
@@ -79,8 +79,8 @@ kernal_replace_rate     = 0.01
 kernal_size             = 9
 
 # layer information
-num_layer               = 11
-num_cnn_layer           = 9
+num_layer               = 9
+num_cnn_layer           = 7
 input_size              = 32
 init_channel_num        = 32
 num_downsampling        = 4

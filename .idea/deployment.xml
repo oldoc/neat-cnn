@@ -7,6 +7,9 @@
           <mappings>
             <mapping deploy="/pycharm/projects/neat-cnn" local="$PROJECT_DIR$" />
           </mappings>
+          <excludedPaths>
+            <excludedPath path="/pycharm/projects/neat-cnn/evaluate/data" />
+          </excludedPaths>
         </serverdata>
       </paths>
     </serverData>
