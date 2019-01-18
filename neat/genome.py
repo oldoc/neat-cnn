@@ -1,7 +1,6 @@
 """Handles genomes (individuals in the population)."""
 from __future__ import division, print_function
 
-
 from itertools import count
 from random import choice, random, shuffle, randint
 
@@ -496,7 +495,7 @@ class DefaultGenome(object):
     def mutate_add_node(self, config):
 
         # Choose the layer to add node (not the last layer)
-        layer_num = randint(0, config.num_layer - 1)
+        layer_num = randint(0, config.num_layer - 2)
 
         # Revise the nodes_every_layers list
         self.nodes_every_layers[layer_num] += 1
@@ -652,6 +651,10 @@ class DefaultGenome(object):
         # Cannot delete node in the first fc layer
         #if self.nodes[del_key].layer == config.num_cnn_layer:
         #    return -1
+
+        # Cannot delete node in the last (output) layer
+        if self.nodes[del_key].layer == config.num_layer:
+            return -1
 
         # If there is only one node
         if len(self.layer[self.nodes[del_key].layer][1]) <= 1:
