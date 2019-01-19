@@ -26,7 +26,7 @@ class cnn_block(nn.Module):
         self.bn1 = nn.BatchNorm2d(out_planes)
         self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.bn2 = nn.BatchNorm2d(out_planes)
-        self.dropout = nn.Dropout2d(p=0.1)
+        self.dropout = nn.Dropout2d(p=0.2)
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
