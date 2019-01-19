@@ -4,6 +4,13 @@ Created on 2018-12-04 10:23:06
 
 @author: AN Zhulin
 """
+import sys,os
+curPath = os.path.abspath(os.path.dirname(__file__))
+parentPath = os.path.split(curPath)[0]
+rootPath = os.path.split(parentPath)[0]
+sys.path.append(rootPath)
+sys.path.append(rootPath+"/neat-cnn")
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,8 +30,8 @@ class cnn_block(nn.Module):
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
-        out = F.relu(self.bn2(self.dropout(self.conv2(out))))
-        #out = F.relu(self.bn2(self.conv2(out)))
+        #out = F.relu(self.bn2(self.dropout(self.conv2(out))))
+        out = F.relu(self.bn2(self.conv2(out)))
         return out
 
 class fc_block(nn.Module):

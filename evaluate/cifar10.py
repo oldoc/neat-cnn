@@ -1,5 +1,9 @@
-import os
-#os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+import sys,os
+curPath = os.path.abspath(os.path.dirname(__file__))
+parentPath = os.path.split(curPath)[0]
+rootPath = os.path.split(parentPath)[0]
+sys.path.append(rootPath)
+sys.path.append(rootPath+"/neat-cnn")
 
 # import numpy as np
 from random import random
@@ -21,7 +25,7 @@ transform = transforms.Compose(
     [transforms.ToTensor(),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-torch_batch_size = 128
+torch_batch_size = 100
 
 gpu = False
 
@@ -31,8 +35,22 @@ first_time = True
 
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                         download=True, transform=transform)
+trainset.train_data = trainset.train_data[0:40000]
+trainset.train_labels = trainset.train_labels[0:40000]
+trainset.train_list = trainset.train_list[0:4]
+
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=torch_batch_size,
                                           shuffle=True, num_workers=0)
+
+evaluateset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                        download=True, transform=transform)
+evaluateset.train_data = evaluateset.train_data[40000:50000]
+evaluateset.train_labels = evaluateset.train_labels[40000:50000]
+evaluateset.train_list = evaluateset.train_list[4:5]
+
+evaluateloader = torch.utils.data.DataLoader(evaluateset, batch_size=torch_batch_size,
+                                          shuffle=False, num_workers=0)
+
 
 testset = torchvision.datasets.CIFAR10(root='./data', train=False,
                                        download=True, transform=transform)
@@ -129,18 +147,14 @@ def eval_genomes(genomes, config):
         optimizer = optim.SGD(net.parameters(), lr, momentum=0.9)
 
         #Evalute the fitness before trainning
-        evaluate_batch_size = 100
-        start = int(random() * (len(trainloader) - evaluate_batch_size))
+        evaluate_batch_size = 0
+        start = 0
 
-        fit = eval_fitness(net, trainloader, evaluate_batch_size, torch_batch_size, start, gpu)
+        fit = eval_fitness(net, evaluateloader, evaluate_batch_size, torch_batch_size, start, gpu)
 
         comp = open("comp.csv", "a")
         comp.write('{0},{1:3.3f},'.format(j, fit))
         print('Before: {0}: {1:3.3f}'.format(j, fit))
-        ###
-
-        losses_len = 100
-        losses = np.array([0.0] * losses_len)
 
         #train the network
         epoch = 0
@@ -194,17 +208,11 @@ def eval_genomes(genomes, config):
             num_loss = 0
 
             # print precision every 10 epoch
-            if epoch % 10 == 9:
-                evaluate_batch_size = 0
-                start = 0
-                fitness_evaluate = eval_fitness(net, trainloader, evaluate_batch_size, torch_batch_size, start, gpu)
 
-                test_batch_size = 0
-                start = 0
-                fitness_test = eval_fitness(net, testloader, test_batch_size, torch_batch_size, start, gpu)
-
-                genome.fitness = fitness_evaluate
-                print('Epoch {3:d}: {0:3.3f}, {1:3.3f}, {2}'.format(fitness_evaluate, fitness_test, genome_id, epoch))
+            #if epoch % 10 == 9:
+            #    fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)
+            #    fitness_test = eval_fitness(net, testloader, 0, torch_batch_size, 0, gpu)
+            #    print('Epoch {3:d}: {0:3.3f}, {1:3.3f}, {2}'.format(fitness_evaluate, fitness_test, genome_id, epoch))
 
             # reload run parameters
             lrfile = open("lr.txt", "r")
@@ -223,17 +231,13 @@ def eval_genomes(genomes, config):
 
         net.write_back_parameters(genome)
 
-        evaluate_batch_size = 0
-        start = 0
-        fitness_evaluate = eval_fitness(net, trainloader, evaluate_batch_size, torch_batch_size, start, gpu)
-
-        test_batch_size = 0
-        start = 0
-        fitness_test = eval_fitness(net, testloader, test_batch_size, torch_batch_size, start, gpu)
+        fitness_train = eval_fitness(net, trainloader, 0, torch_batch_size, 0, gpu)
+        fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)
+        fitness_test = eval_fitness(net, testloader, 0, torch_batch_size, 0, gpu)
 
         genome.fitness = fitness_evaluate
-        print('After: {0:3.3f}, {1:3.3f}, {2}'.format(fitness_evaluate, fitness_test, genome_id))
-        comp.write('{0:3.3f},{1:3.3f},{2},{3:3.6f},{4:3.6f}\n'.format(fitness_evaluate, fitness_test, genome_id, lr, delta))
+        print('After: {0:3.3f}, {1:3.3f}, {2:3.3f}, {3}'.format(fitness_train, fitness_evaluate, fitness_test, genome_id))
+        comp.write('{0:3.3f},{1:3.3f},{2:3.3f},{3},{4:3.6f},{5:3.6f}\n'.format(fitness_train, fitness_evaluate, fitness_test, genome_id, lr, delta))
         comp.close
 
     #del the net not in current population
@@ -260,7 +264,7 @@ best = open("best.txt", "w")
 res.close()
 best.close()
 comp = open("comp.csv", "w")
-comp.write("num,before,after_eva,after_test,id,lr,delta\n")
+comp.write("num,before,after_train,after_eva,after_test,id,lr,delta\n")
 comp.close()
 
 # Create the population, which is the top-level object for a NEAT run.
@@ -285,7 +289,7 @@ net = evaluate_torch.Net(config, winner)
 if gpu:
     net.cuda()
 
-final_train_epoch = 40
+final_train_epoch = 50
 
 for epoch in range(final_train_epoch):
 

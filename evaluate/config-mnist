@@ -2,15 +2,15 @@
 
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 0.97
-pop_size              = 4
+fitness_threshold     = 0.98
+pop_size              = 12
 reset_on_extinction   = False
 
 [DefaultGenome]
 # node activation options
-activation_default      = sigmod
+activation_default      = relu
 activation_mutate_rate  = 0.0
-activation_options      = sigmod
+activation_options      = relu
 
 # node aggregation options
 aggregation_default     = sum
@@ -79,18 +79,18 @@ kernal_replace_rate     = 0.01
 kernal_size             = 9
 
 # layer information
-num_layer               = 9
-num_cnn_layer           = 7
+num_layer               = 11
+num_cnn_layer           = 9
 input_size              = 32
 init_channel_num        = 32
 num_downsampling        = 4
 
 [DefaultSpeciesSet]
-compatibility_threshold = 397
+compatibility_threshold = 3.9913
 
 [DefaultStagnation]
 species_fitness_func = max
-max_stagnation       = 10
+max_stagnation       = 5
 species_elitism      = 2
 
 [DefaultReproduction]
