@@ -167,6 +167,10 @@ def eval_genomes(genomes, config):
         #for epoch in range(10):
             epoch += 1
 
+            if epoch % 10 == 0:
+                lr /= 10
+                print("Learning rate set to: {0:1.3f}".format(lr))
+
             for i, data in enumerate(trainloader, 0):
                 # get the inputs
                 inputs, labels = data
@@ -260,8 +264,10 @@ else:
 
 # reset result file
 res = open("result.csv", "w")
+info = open("info.txt", "w")
 best = open("best.txt", "w")
 res.close()
+info.close()
 best.close()
 comp = open("comp.csv", "w")
 comp.write("num,before,after_train,after_eva,after_test,id,lr,delta\n")
@@ -271,7 +277,7 @@ comp.close()
 p = neat.Population(config)
 
 # Add a stdout reporter to show progress in the terminal.
-p.add_reporter(neat.StdOutReporter(False))
+p.add_reporter(neat.StdOutReporter(True))
 
 # Run until a solution is found.
 winner = p.run(eval_genomes)

@@ -99,19 +99,27 @@ class StdOutReporter(BaseReporter):
         self.num_extinctions = 0
 
     def start_generation(self, generation):
+        info = open("info.txt", "a")
         self.generation = generation
         print('\n ****** Running generation {0} ****** \n'.format(generation))
+        info.write('\n ****** Running generation {0} ****** \n\n'.format(generation))
         self.generation_start_time = time.time()
+        info.close()
 
     def end_generation(self, config, population, species_set):
+        info = open("info.txt", "a")
+
         ng = len(population)
         ns = len(species_set.species)
         if self.show_species_detail:
             print('Population of {0:d} members in {1:d} species:'.format(ng, ns))
+            info.write('Population of {0:d} members in {1:d} species:\n'.format(ng, ns))
             sids = list(iterkeys(species_set.species))
             sids.sort()
             print("   ID   age  size  fitness  adj fit  stag")
             print("  ====  ===  ====  =======  =======  ====")
+            info.write("   ID   age  size  fitness  adj fit  stag\n")
+            info.write("  ====  ===  ====  =======  =======  ====\n")
             for sid in sids:
                 s = species_set.species[sid]
                 a = self.generation - s.created
@@ -121,20 +129,29 @@ class StdOutReporter(BaseReporter):
                 st = self.generation - s.last_improved
                 print(
                     "  {: >4}  {: >3}  {: >4}  {: >7}  {: >7}  {: >4}".format(sid, a, n, f, af, st))
+                info.write(
+                    "  {: >4}  {: >3}  {: >4}  {: >7}  {: >7}  {: >4}\n".format(sid, a, n, f, af, st))
         else:
             print('Population of {0:d} members in {1:d} species'.format(ng, ns))
+            info.write('Population of {0:d} members in {1:d} species\n'.format(ng, ns))
 
         elapsed = time.time() - self.generation_start_time
         self.generation_times.append(elapsed)
         self.generation_times = self.generation_times[-10:]
         average = sum(self.generation_times) / len(self.generation_times)
         print('Total extinctions: {0:d}'.format(self.num_extinctions))
+        info.write('Total extinctions: {0:d}\n'.format(self.num_extinctions))
         if len(self.generation_times) > 1:
             print("Generation time: {0:.3f} sec ({1:.3f} average)".format(elapsed, average))
+            info.write("Generation time: {0:.3f} sec ({1:.3f} average)\n".format(elapsed, average))
         else:
             print("Generation time: {0:.3f} sec".format(elapsed))
+            info.write("Generation time: {0:.3f} sec\n".format(elapsed))
+
+        info.close()
 
     def post_evaluate(self, config, population, species, best_genome):
+        info = open("info.txt", "a")
         # pylint: disable=no-self-use
         fitnesses = [c.fitness for c in itervalues(population)]
         fit_mean = mean(fitnesses)
@@ -145,10 +162,17 @@ class StdOutReporter(BaseReporter):
             'Best fitness: {0:3.5f} - size: {1!r} - species {2} - id {3}'.format(best_genome.fitness,
                                                                                  best_genome.size(),
                                                                                  best_species_id,
-                                                                     best_genome.key))
+                                                                                 best_genome.key))
+        info.write('Population\'s average fitness: {0:3.5f} stdev: {1:3.5f}\n'.format(fit_mean, fit_std))
+        info.write(
+            'Best fitness: {0:3.5f} - size: {1!r} - species {2} - id {3}\n'.format(best_genome.fitness,
+                                                                                 best_genome.size(),
+                                                                                 best_species_id,
+                                                                                 best_genome.key))
         res = open("result.csv", "a")
         res.write('{0:3.5f},{1:3.5f} \n'.format(best_genome.fitness, fit_mean))
         res.close()
+        info.close()
  # andrew add
         if (best_genome.fitness > self.bestFitness):
             self.bestFitness = best_genome.fitness

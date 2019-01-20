@@ -36,6 +36,10 @@ class DefaultGenomeConfig(object):
                         ConfigParameter('conn_delete_prob', float),
                         ConfigParameter('node_add_prob', float),
                         ConfigParameter('node_delete_prob', float),
+                        ConfigParameter('conn_add_num', int),
+                        ConfigParameter('conn_delete_num', int),
+                        ConfigParameter('node_add_num', int),
+                        ConfigParameter('node_delete_num', int),
                         ConfigParameter('single_structural_mutation', bool, 'false'),
                         ConfigParameter('structural_mutation_surer', str, 'default'),
                         ConfigParameter('initial_connection', str, 'unconnected'),
@@ -466,7 +470,7 @@ class DefaultGenome(object):
                 self.mutate_add_connection(config)
             elif r < ((config.node_add_prob + config.node_delete_prob +
                        config.conn_add_prob + config.conn_delete_prob)/div):
-                self.mutate_delete_connection()
+                self.mutate_delete_connection(config)
         else:
             if random() < config.node_add_prob:
                 self.mutate_add_node(config)
@@ -478,7 +482,7 @@ class DefaultGenome(object):
                 self.mutate_add_connection(config)
 
             if random() < config.conn_delete_prob:
-                self.mutate_delete_connection()
+                self.mutate_delete_connection(config)
 
         # Mutate connection genes.
         for cg in self.connections.values():
@@ -493,42 +497,44 @@ class DefaultGenome(object):
     # to all the input. Then add one connection to the former layer and one to the after layer.
     # Note: The node cannot be added to the last layer!
     def mutate_add_node(self, config):
+        num = 0
+        for i in range(config.node_add_num):
+            num += 1
+            # Choose the layer to add node (not the last layer)
+            layer_num = randint(0, config.num_layer - 2)
 
-        # Choose the layer to add node (not the last layer)
-        layer_num = randint(0, config.num_layer - 2)
+            # Revise the nodes_every_layers list
+            self.nodes_every_layers[layer_num] += 1
 
-        # Revise the nodes_every_layers list
-        self.nodes_every_layers[layer_num] += 1
+            new_node_id = config.get_new_node_key(self.nodes)
+            ng = self.create_node(config, new_node_id, layer_num)
 
-        new_node_id = config.get_new_node_key(self.nodes)
-        ng = self.create_node(config, new_node_id, layer_num)
+            self.layer[layer_num][1].add(new_node_id)
+            self.nodes[new_node_id] = ng
 
-        self.layer[layer_num][1].add(new_node_id)
-        self.nodes[new_node_id] = ng
-
-        # if the added node in first layer
-        if layer_num == 0:
-            # Add full connection between input and the first layer
-            if config.full_connect_input:
-                for input_id in config.input_keys:
+            # if the added node in first layer
+            if layer_num == 0:
+                # Add full connection between input and the first layer
+                if config.full_connect_input:
+                    for input_id in config.input_keys:
+                        connection = self.create_connection(config, input_id, new_node_id)
+                        self.connections[connection.key] = connection
+                # Add one connction between input and the first layer
+                else:
+                    input_id = choice(config.input_keys)
                     connection = self.create_connection(config, input_id, new_node_id)
                     self.connections[connection.key] = connection
-            # Add one connction between input and the first layer
+            # Not the first layer node, and one connection to a node in the former layer
             else:
-                input_id = choice(config.input_keys)
-                connection = self.create_connection(config, input_id, new_node_id)
+                node_id = choice(list(self.layer[layer_num - 1][1]))
+                connection = self.create_connection(config, node_id, new_node_id)
                 self.connections[connection.key] = connection
-        # Not the first layer node, and one connection to a node in the former layer
-        else:
-            node_id = choice(list(self.layer[layer_num - 1][1]))
-            connection = self.create_connection(config, node_id, new_node_id)
+
+            # Add one connection to a node in the after layer
+            node_id = choice(list(self.layer[layer_num + 1][1]))
+            connection = self.create_connection(config, new_node_id, node_id)
             self.connections[connection.key] = connection
-
-        # Add one connection to a node in the after layer
-        node_id = choice(list(self.layer[layer_num + 1][1]))
-        connection = self.create_connection(config, new_node_id, node_id)
-        self.connections[connection.key] = connection
-
+        print("{0} nodes added!".format(num))
 
     """
     def mutate_add_node(self, config):
@@ -554,6 +560,7 @@ class DefaultGenome(object):
     """
     # Not used
     def add_connection(self, config, input_key, output_key, weight, enabled):
+
         # TODO: Add further validation of this connection addition?
         assert isinstance(input_key, int)
         assert isinstance(output_key, int)
@@ -606,82 +613,93 @@ class DefaultGenome(object):
     # Add a connection to the network.
     # TODO: Make sure the in_node is in the smaller layer, and out_node in the next layer
     def mutate_add_connection(self, config):
+        num = 0
+        for i in range(config.conn_add_num):
 
-        # Choose the outnode layer
-        layer_num = randint(0, config.num_layer - 1)
+            # Choose the outnode layer
+            layer_num = randint(0, config.num_layer - 1)
 
-        # If choose out_node form the first layer, the input_node should choose from input ot the network.
-        if layer_num == 0:
-            out_node = choice(list(self.layer[layer_num][1]))
-            in_node = choice(config.input_keys)
-        else:
-            out_node = choice(list(self.layer[layer_num][1]))
-            in_node = choice(list(self.layer[layer_num - 1][1]))
+            # If choose out_node form the first layer, the input_node should choose from input ot the network.
+            if layer_num == 0:
+                out_node = choice(list(self.layer[layer_num][1]))
+                in_node = choice(config.input_keys)
+            else:
+                out_node = choice(list(self.layer[layer_num][1]))
+                in_node = choice(list(self.layer[layer_num - 1][1]))
 
-        # Don't duplicate connections.
-        key = (in_node, out_node)
-        if key in self.connections:
-            # TODO: Should this be using mutation to/from rates? Hairy to configure...
-            if config.check_structural_mutation_surer():
-                self.connections[key].enabled = True
-            return
+            # Don't duplicate connections.
+            key = (in_node, out_node)
+            if key in self.connections:
+                # TODO: Should this be using mutation to/from rates? Hairy to configure...
+                if config.check_structural_mutation_surer():
+                    self.connections[key].enabled = True
+                continue
 
-        # Don't allow connections between two output nodes
-        if in_node in config.output_keys and out_node in config.output_keys:
-            return
+            # Don't allow connections between two output nodes
+            if in_node in config.output_keys and out_node in config.output_keys:
+                continue
 
-        # No need to check for connections between input nodes:
-        # they cannot be the output end of a connection (see above).
+            # No need to check for connections between input nodes:
+            # they cannot be the output end of a connection (see above).
 
-        # For feed-forward networks, avoid creating cycles.
-        if config.feed_forward and creates_cycle(list(iterkeys(self.connections)), key):
-            return
+            # For feed-forward networks, avoid creating cycles.
+            if config.feed_forward and creates_cycle(list(iterkeys(self.connections)), key):
+                continue
 
-        cg = self.create_connection(config, in_node, out_node)
-        self.connections[cg.key] = cg
+            cg = self.create_connection(config, in_node, out_node)
+            self.connections[cg.key] = cg
+            num += 1
+        print("{0} connections added!".format(num))
 
     def mutate_delete_node(self, config):
-        # Do nothing if there are no non-output nodes.
-        available_nodes = [k for k in iterkeys(self.nodes) if k not in config.output_keys]
-        if not available_nodes:
-            return -1
+        num = 0
+        for i in range(config.node_delete_num):
+            # Do nothing if there are no non-output nodes.
+            available_nodes = [k for k in iterkeys(self.nodes) if k not in config.output_keys]
+            if not available_nodes:
+                continue
 
-        del_key = choice(available_nodes)
+            del_key = choice(available_nodes)
 
-        # Cannot delete node in the first fc layer
-        #if self.nodes[del_key].layer == config.num_cnn_layer:
-        #    return -1
+            # Cannot delete node in the first fc layer
+            #if self.nodes[del_key].layer == config.num_cnn_layer:
+            #    return -1
 
-        # Cannot delete node in the last (output) layer
-        if self.nodes[del_key].layer == config.num_layer:
-            return -1
+            # Cannot delete node in the last (output) layer
+            if self.nodes[del_key].layer == config.num_layer:
+                continue
 
-        # If there is only one node
-        if len(self.layer[self.nodes[del_key].layer][1]) <= 1:
-            return -1
+            # If there is only one node
+            if len(self.layer[self.nodes[del_key].layer][1]) <= 1:
+                continue
 
-        connections_to_delete = set()
-        for k, v in iteritems(self.connections):
-            if del_key in v.key:
-                connections_to_delete.add(v.key)
+            connections_to_delete = set()
+            for k, v in iteritems(self.connections):
+                if del_key in v.key:
+                    connections_to_delete.add(v.key)
 
-        for key in connections_to_delete:
-            del self.connections[key]
+            for key in connections_to_delete:
+                del self.connections[key]
 
-        self.layer[self.nodes[del_key].layer][1].remove(del_key)
+            self.layer[self.nodes[del_key].layer][1].remove(del_key)
 
-        # Revise the nodes_every_layers list
-        self.nodes_every_layers[self.nodes[del_key].layer] -= 1
+            # Revise the nodes_every_layers list
+            self.nodes_every_layers[self.nodes[del_key].layer] -= 1
 
-        del self.nodes[del_key]
+            del self.nodes[del_key]
 
-        return del_key
+            num += 1
+        print("{0} nodes deleted!".format(num))
 
-    def mutate_delete_connection(self):
-        if self.connections:
-            key = choice(list(self.connections.keys()))
-            #TODO: add judgement to avoid del the last connection between two layers
-            del self.connections[key]
+    def mutate_delete_connection(self, config):
+        num = 0
+        for i in range(config.conn_delete_num):
+            if self.connections:
+                key = choice(list(self.connections.keys()))
+                #TODO: add judgement to avoid del the last connection between two layers
+                del self.connections[key]
+                num += 1
+        print("{0} connections deleted!".format(num))
 
     def distance(self, other, config):
         """
