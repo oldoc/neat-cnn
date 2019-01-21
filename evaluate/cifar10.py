@@ -122,6 +122,9 @@ def eval_fitness(net, loader, batch_size, torch_batch_size, start, gpu):
 
 def eval_genomes(genomes, config):
 
+    global gpu
+    global first_time
+
     if torch.cuda.is_available():
         gpu = True
         print("Running on GPU!")
@@ -150,10 +153,25 @@ def eval_genomes(genomes, config):
         #    net = net_dict[genome_id]
         #else:
 
+        #net = evaluate_torch.Net(config, genome)
+
+        # load lr and epoch
+        lrfile = open("lr.txt", "r")
+        tmp = lrfile.readline().rstrip('\n')
+        lr = float(tmp)
+        tmp = lrfile.readline().rstrip('\n')
+        delta = float(tmp)
+        tmp = lrfile.readline().rstrip('\n')
+        max_epoch = int(tmp)
+        train_epoch = int(tmp)
+        lrfile.close()
+
+        print(first_time)
         if first_time:
             net = evaluate_torch.Net(config, genome, False)
         else:
             net = evaluate_torch.Net(config, genome, True)
+
 
         if gpu:
             net.cuda()
@@ -185,7 +203,7 @@ def eval_genomes(genomes, config):
             running_loss = 0.0
             correct = 0
             total = 0
-            print('\nEpoch: %d' % epoch)
+            print('Epoch: %d' % epoch)
 
             if epoch % (train_epoch // 3) == 0:
                 lr /= 10
@@ -248,17 +266,7 @@ def eval_genomes(genomes, config):
                 print('Epoch {3:d}: {0:3.3f}, {1:3.3f}, {2}'.format(fitness_evaluate, fitness_test, genome_id, epoch))
 
             # reload run parameters
-            """
-            lrfile = open("lr.txt", "r")
-            tmp = lrfile.readline().rstrip('\n')
-            lr = float(tmp)
-            tmp = lrfile.readline().rstrip('\n')
-            delta = float(tmp)
-            tmp = lrfile.readline().rstrip('\n')
-            max_epoch = int(tmp)
-            train_epoch = int(tmp)
-            lrfile.close()
-            """
+
         print('Finished Training')
 
         #evaluate the fitness
@@ -270,10 +278,11 @@ def eval_genomes(genomes, config):
         fitness_test = eval_fitness(net, testloader, 0, torch_batch_size, 0, gpu)
 
         genome.fitness = fitness_evaluate
-        print('After: {0:3.3f}, {1:3.3f}, {2:3.3f}, {3}'.format(fitness_train, fitness_evaluate, fitness_test, genome_id))
+        print('After: {0:3.3f}, {1:3.3f}, {2:3.3f}, {3}\n'.format(fitness_train, fitness_evaluate, fitness_test, genome_id))
         comp.write('{0:3.3f},{1:3.3f},{2:3.3f},{3},{4:3.6f},{5:3.6f}\n'.format(fitness_train, fitness_evaluate, fitness_test, genome_id, lr, delta))
         comp.close
-
+    if first_time:
+        first_time = False
     #del the net not in current population
     #net_id = set(net_dict.keys())
     #net_to_del = net_id - genomes_id_set

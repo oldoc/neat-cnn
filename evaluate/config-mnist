@@ -3,7 +3,7 @@
 [NEAT]
 fitness_criterion     = max
 fitness_threshold     = 0.98
-pop_size              = 2
+pop_size              = 12
 reset_on_extinction   = False
 
 [DefaultGenome]
@@ -83,7 +83,7 @@ kernal_replace_rate     = 0.01
 kernal_size             = 9
 
 # layer information
-num_layer               = 10
+num_layer               = 11
 num_cnn_layer           = 9
 input_size              = 32
 init_channel_num        = 32

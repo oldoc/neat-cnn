@@ -44,7 +44,7 @@ class fc_block(nn.Module):
     def forward(self, x):
         #out = F.relu(self.bn(self.dropout(self.fc(x))))
         out = F.relu(self.bn(self.fc(x)))
-        out = self.fc(x)
+        #out = self.fc(x)
         return out
 
 class Net(nn.Module):
