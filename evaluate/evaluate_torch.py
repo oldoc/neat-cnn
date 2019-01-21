@@ -4,6 +4,13 @@ Created on 2018-12-04 10:23:06
 
 @author: AN Zhulin
 """
+import sys,os
+curPath = os.path.abspath(os.path.dirname(__file__))
+parentPath = os.path.split(curPath)[0]
+rootPath = os.path.split(parentPath)[0]
+sys.path.append(rootPath)
+sys.path.append(rootPath+"/neat-cnn")
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,12 +26,12 @@ class cnn_block(nn.Module):
         self.bn1 = nn.BatchNorm2d(out_planes)
         self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.bn2 = nn.BatchNorm2d(out_planes)
-        self.dropout = nn.Dropout2d(p=0.2)
+        #self.dropout = nn.Dropout2d(p=0.1)
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
-        out = F.relu(self.bn2(self.dropout(self.conv2(out))))
-        #out = F.relu(self.bn2(self.conv2(out)))
+        #out = F.relu(self.bn2(self.dropout(self.conv2(out))))
+        out = F.relu(self.bn2(self.conv2(out)))
         return out
 
 class fc_block(nn.Module):
@@ -32,15 +39,17 @@ class fc_block(nn.Module):
         super(fc_block, self).__init__()
         self.fc = nn.Linear(in_planes, out_planes)
         self.bn = nn.BatchNorm1d(out_planes)
-        self.dropout = nn.Dropout(p=0.25)
+        #self.dropout = nn.Dropout(p=0.25)
 
     def forward(self, x):
-        out = F.relu(self.bn(self.dropout(self.fc(x))))
+        #out = F.relu(self.bn(self.dropout(self.fc(x))))
+        out = F.relu(self.bn(self.fc(x)))
+        out = self.fc(x)
         return out
 
 class Net(nn.Module):
     # (128,2) means conv planes=128, conv stride=2, by default conv stride=1
-    # cfg = [64, (128,2), 128, (256,2), 256, (512,2), 512, 512, 512, 512, 512, (1024,2), 1024]
+    # cfg = [32, 32, (64, 2), 64, (128,2), 128, (256,2), 256, (512,2)]
 
     def __init__(self, config, genome: neat.genome.DefaultGenome, set_parameters):
         super(Net, self).__init__()
