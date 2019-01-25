@@ -169,18 +169,16 @@ class StdOutReporter(BaseReporter):
                                                                                  best_genome.size(),
                                                                                  best_species_id,
                                                                                  best_genome.key))
-        res = open("result.csv", "a")
-        res.write('{0:3.5f},{1:3.5f} \n'.format(best_genome.fitness, fit_mean))
-        res.close()
         info.close()
- # andrew add
+        """
+        # andrew add
         if (best_genome.fitness > self.bestFitness):
             self.bestFitness = best_genome.fitness
             best = open("best.txt", "a")
             best.write('\nBest genome:\n{!s}'.format(best_genome))
             best.close()
-# andrew end
-
+        # andrew end
+        """
 
     def complete_extinction(self):
         self.num_extinctions += 1

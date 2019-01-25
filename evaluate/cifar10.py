@@ -45,6 +45,8 @@ gpu = False
 
 first_time = True
 
+best_on_test_set = 0.9
+
 #net_dict = {}
 
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
@@ -124,6 +126,9 @@ def eval_genomes(genomes, config):
 
     global gpu
     global first_time
+    global best_on_test_set
+
+    best_every_generation = list()
 
     if torch.cuda.is_available():
         gpu = True
@@ -132,7 +137,7 @@ def eval_genomes(genomes, config):
         gpu = False
         print("Running on CPU!")
 
-
+    """
     lrfile= open("lr.txt", "r")
     tmp = lrfile.readline().rstrip('\n')
     lr = float(tmp)
@@ -141,6 +146,7 @@ def eval_genomes(genomes, config):
     tmp = lrfile.readline().rstrip('\n')
     max_epoch = int(tmp)
     lrfile.close()
+    """
 
     #genomes_id_set = set()
 
@@ -160,10 +166,7 @@ def eval_genomes(genomes, config):
         tmp = lrfile.readline().rstrip('\n')
         lr = float(tmp)
         tmp = lrfile.readline().rstrip('\n')
-        delta = float(tmp)
-        tmp = lrfile.readline().rstrip('\n')
         max_epoch = int(tmp)
-        train_epoch = int(tmp)
         lrfile.close()
 
         print(first_time)
@@ -205,7 +208,7 @@ def eval_genomes(genomes, config):
             total = 0
             print('Epoch: %d' % epoch)
 
-            if epoch % (train_epoch // 3) == 0:
+            if (train_epoch > 3) and (epoch % (train_epoch // 3) == 0):
                 lr /= 10
                 optimizer = optim.SGD(net.parameters(), lr, momentum=0.9)
                 print("Learning rate set to: {0:1.4f}".format(lr))
@@ -277,12 +280,34 @@ def eval_genomes(genomes, config):
         fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)
         fitness_test = eval_fitness(net, testloader, 0, torch_batch_size, 0, gpu)
 
+        #save the best net on test set
+        if fitness_test > best_on_test_set:
+            torch.save(net, "best.pkl")
+
+        best_every_generation.append((fitness_train, fitness_evaluate, fitness_test, genome_id, lr))
+
         genome.fitness = fitness_evaluate
         print('After: {0:3.3f}, {1:3.3f}, {2:3.3f}, {3}\n'.format(fitness_train, fitness_evaluate, fitness_test, genome_id))
-        comp.write('{0:3.3f},{1:3.3f},{2:3.3f},{3},{4:3.6f},{5:3.6f}\n'.format(fitness_train, fitness_evaluate, fitness_test, genome_id, lr, delta))
+        comp.write('{0:3.3f},{1:3.3f},{2:3.3f},{3},{4:3.6f}\n'.format(fitness_train, fitness_evaluate, fitness_test, genome_id, lr))
         comp.close
     if first_time:
         first_time = False
+
+    best = 0.0
+    best_id = 0
+    for i in range(len(best_every_generation)):
+        if best_every_generation[i][0] > best:
+            best = best_every_generation[i][0]
+            best_id = i
+
+    res = open("result.csv", "a")
+    res.write('{0:3.3f},{1:3.3f},{2:3.3f},{3},{4:3.6f}\n'.format(best_every_generation[best_id][0],
+                                                                 best_every_generation[best_id][1],
+                                                                 best_every_generation[best_id][2],
+                                                                 best_every_generation[best_id][3],
+                                                                 best_every_generation[best_id][4]))
+    res.close()
+
     #del the net not in current population
     #net_id = set(net_dict.keys())
     #net_to_del = net_id - genomes_id_set
@@ -329,12 +354,12 @@ winner = p.run(eval_genomes)
 # Display the winning genome.
 #print('\nBest genome:\n{!s}'.format(winner))
 
-
+"""
 net = evaluate_torch.Net(config, winner)
 if gpu:
     net.cuda()
 
-final_train_epoch = 50
+final_train_epoch = 400
 
 for epoch in range(final_train_epoch):
 
@@ -392,7 +417,7 @@ start = 0
 fit = eval_fitness(net, testloader, evaluate_batch_size, torch_batch_size, start, gpu)
 
 print("Final fitness: {0:3.3f}".format(fit))
-
+"""
 #TODO: wirte model to pytorch files
 
 node_names = {# -28: '-28', -27: '-27', -26: '-26', -25: '-25', -24: '-24', -23: '-23', -22: '-22', -21: '-21',
