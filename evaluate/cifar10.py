@@ -204,12 +204,12 @@ def eval_genomes(genomes, config):
             correct = 0
             total = 0
             print('Epoch: %d' % epoch)
-
+            
             if epoch % (train_epoch // 3) == 0:
                 lr /= 10
                 optimizer = optim.SGD(net.parameters(), lr, momentum=0.9)
                 print("Learning rate set to: {0:1.4f}".format(lr))
-
+        
             for i, data in enumerate(trainloader, 0):
                 # get the inputs
                 inputs, labels = data
