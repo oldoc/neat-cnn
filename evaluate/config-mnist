@@ -1,4 +1,4 @@
-#--- parameters for the mnist experiment ---#
+#--- parameters for the neat-cnn experiment ---#
 
 [NEAT]
 fitness_criterion     = max

@@ -207,10 +207,10 @@ class Net(nn.Module):
             nodes.update({i: position})
             order += 1
 
-        # TODO: check if it is correct
         # add every layers to nodes dict
         for i in range(self.num_layer):
             l = list(genome.layer[i][1])
+            l.sort()
 
             for j in range(len(l)):
                 # add node (id, [layer, order in layer]
@@ -225,7 +225,6 @@ class Net(nn.Module):
                 else:
                     genome.nodes[l[j]].bias = layer[i + self.num_cnn_layer].bias.data[j].item()
 
-        # TODO: add write back
         for in_node, out_node in genome.connections:
 
             c = nodes[out_node][0]  # layer number
