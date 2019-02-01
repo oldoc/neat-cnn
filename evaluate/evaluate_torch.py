@@ -128,27 +128,14 @@ class Net(nn.Module):
 
     def set_parameters(self, genome: neat.genome.DefaultGenome):
 
-        if len(genome.bn) > 0:
-            assert len(genome.bn) == self.num_cnn_layer * 2 + self.num_layer - self.num_cnn_layer
-
         layer = list()  # make sure change layer can affect parameters in cnn
-        i = 0
         for module in self.children():
             for block in module:
                 if isinstance(block, cnn_block):
                     layer.append(block.conv1)
-                    if len(genome.bn) > 0:
-                        block.bn1 = genome.bn[i]
-                        i += 1
                     layer.append(block.conv2)
-                    if len(genome.bn) > 0:
-                        block.bn2 = genome.bn[i]
-                        i += 1
                 elif isinstance(block, fc_block):
                     layer.append(block.fc)
-                    if len(genome.bn) > 0:
-                        block.bn = genome.bn[i]
-                        i += 1
 
         nodes = {}
 
@@ -202,18 +189,14 @@ class Net(nn.Module):
 
     def write_back_parameters(self, genome: neat.genome.DefaultGenome):
 
-        genome.bn.clear()
         layer = list()  # make sure change layer can affect parameters in cnn
         for module in self.children():
             for block in module:
                 if isinstance(block, cnn_block):
                     layer.append(block.conv1)
                     layer.append(block.conv2)
-                    genome.bn.append(block.bn1)
-                    genome.bn.append(block.bn2)
                 elif isinstance(block, fc_block):
                     layer.append(block.fc)
-                    genome.bn.append(block.bn)
 
         nodes = {}
 

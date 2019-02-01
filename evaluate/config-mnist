@@ -90,7 +90,7 @@ init_channel_num        = 32
 num_downsampling        = 4
 
 [DefaultSpeciesSet]
-compatibility_threshold = 3.993
+compatibility_threshold = 3.9915
 
 [DefaultStagnation]
 species_fitness_func = max
