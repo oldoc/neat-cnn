@@ -180,6 +180,7 @@ class DefaultGenome(object):
         self.layer = []
         self.downsampling_mask = []
         self.nodes_every_layers = []
+        self.bn = []
 
         # Compute node number in every layer.
         assert config.num_cnn_layer >= config.num_downsampling

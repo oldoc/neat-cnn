@@ -22,7 +22,7 @@ class cnn_block(nn.Module):
     '''Depthwise conv + Pointwise conv'''
     def __init__(self, in_planes, out_planes, stride=1):
         super(cnn_block, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=True)
+        self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(out_planes)
         self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.bn2 = nn.BatchNorm2d(out_planes)
@@ -128,14 +128,27 @@ class Net(nn.Module):
 
     def set_parameters(self, genome: neat.genome.DefaultGenome):
 
+        if len(genome.bn) > 0:
+            assert len(genome.bn) == self.num_cnn_layer * 2 + self.num_layer - self.num_cnn_layer
+
         layer = list()  # make sure change layer can affect parameters in cnn
+        i = 0
         for module in self.children():
             for block in module:
                 if isinstance(block, cnn_block):
                     layer.append(block.conv1)
+                    if len(genome.bn) > 0:
+                        block.bn1 = genome.bn[i]
+                        i += 1
                     layer.append(block.conv2)
+                    if len(genome.bn) > 0:
+                        block.bn2 = genome.bn[i]
+                        i += 1
                 elif isinstance(block, fc_block):
                     layer.append(block.fc)
+                    if len(genome.bn) > 0:
+                        block.bn = genome.bn[i]
+                        i += 1
 
         nodes = {}
 
@@ -189,14 +202,18 @@ class Net(nn.Module):
 
     def write_back_parameters(self, genome: neat.genome.DefaultGenome):
 
+        genome.bn.clear()
         layer = list()  # make sure change layer can affect parameters in cnn
         for module in self.children():
             for block in module:
                 if isinstance(block, cnn_block):
                     layer.append(block.conv1)
                     layer.append(block.conv2)
+                    genome.bn.append(block.bn1)
+                    genome.bn.append(block.bn2)
                 elif isinstance(block, fc_block):
                     layer.append(block.fc)
+                    genome.bn.append(block.bn)
 
         nodes = {}
 

@@ -280,6 +280,47 @@ def eval_genomes(genomes, config):
         fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)
         fitness_test = eval_fitness(net, testloader, 0, torch_batch_size, 0, gpu)
 
+        """
+
+        print("Write parameters to genome.")
+        net.write_back_parameters(genome)
+
+        fitness_train = eval_fitness(net, trainloader, 0, torch_batch_size, 0, gpu)
+        fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)
+        fitness_test = eval_fitness(net, testloader, 0, torch_batch_size, 0, gpu)
+        print('After write back: {0:3.3f}, {1:3.3f}, {2:3.3f}, {3}\n'.format(fitness_train, fitness_evaluate, fitness_test, genome_id))
+
+        
+        for module in net.children():
+            for block in module:
+                if isinstance(block, evaluate_torch.cnn_block):
+                    #print(block.conv1.bias.data)
+                    print(block.conv2.bias.data)
+                elif isinstance(block, evaluate_torch.fc_block):
+                    print(block.fc.bias.data)
+        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+        
+        print("Create net from genome.")
+        net2 = evaluate_torch.Net(config, genome, True)
+       
+        for module in net2.children():
+            for block in module:
+                if isinstance(block, evaluate_torch.cnn_block):
+                    #print(block.conv1.bias.data)
+                    print(block.conv2.bias.data)
+                elif isinstance(block, evaluate_torch.fc_block):
+                    print(block.fc.bias.data)
+        
+        if gpu:
+            net2.cuda()
+
+        fitness_train = eval_fitness(net2, trainloader, 0, torch_batch_size, 0, gpu)
+        fitness_evaluate = eval_fitness(net2, evaluateloader, 0, torch_batch_size, 0, gpu)
+        fitness_test = eval_fitness(net2, testloader, 0, torch_batch_size, 0, gpu)
+
+        print('After reloaded: {0:3.3f}, {1:3.3f}, {2:3.3f}, {3}\n'.format(fitness_train, fitness_evaluate, fitness_test, genome_id))
+        """
+
         #save the best net on test set
         if fitness_test > best_on_test_set:
             torch.save(net, "best.pkl")
