@@ -22,7 +22,7 @@ class cnn_block(nn.Module):
     '''Depthwise conv + Pointwise conv'''
     def __init__(self, in_planes, out_planes, stride=1):
         super(cnn_block, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=True)
         self.bn1 = nn.BatchNorm2d(out_planes)
         self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.bn2 = nn.BatchNorm2d(out_planes)
