@@ -22,16 +22,31 @@ class cnn_block(nn.Module):
     '''Depthwise conv + Pointwise conv'''
     def __init__(self, in_planes, out_planes, stride=1):
         super(cnn_block, self).__init__()
+        #Add for shortcut
+        self.stride = stride
+
         self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=True)
         self.bn1 = nn.BatchNorm2d(out_planes)
         self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.bn2 = nn.BatchNorm2d(out_planes)
         #self.dropout = nn.Dropout2d(p=0.1)
 
+        # Add short cut. 2019.2.19
+        self.shortcut = nn.Sequential()
+        if stride == 1 and in_planes != out_planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False),
+                nn.BatchNorm2d(out_planes),
+            )
+
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
         #out = F.relu(self.bn2(self.dropout(self.conv2(out))))
-        out = F.relu(self.bn2(self.conv2(out)))
+        #out = F.relu(self.bn2(self.conv2(out)))
+        out = self.bn2(self.conv2(out))
+
+        # Add short cut. 2019.2.19
+        out = out + self.shortcut(x) if self.stride == 1 else out
         return out
 
 class fc_block(nn.Module):
