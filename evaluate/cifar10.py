@@ -77,6 +77,13 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=torch_batch_size,
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
+# 第epoch值进行计算并更新学习率
+def get_adjusted_lr(epoch, T_0=150, T_mult=1, eta_max=0.1, eta_min=0.):
+    i = np.log2(epoch / T_0 + 1).astype(np.int)
+    T_cur = epoch - T_0 * (T_mult ** (i) - 1)
+    T_i = (T_0 * T_mult ** i)
+    cur_lr = eta_min + 0.5 * (eta_max - eta_min) * (1 + np.cos(np.pi * T_cur / T_i))
+    return cur_lr
 
 # evaluate the fitness
 # batch_size = 0 means evaluate until reach the end of the evaluate set
@@ -194,9 +201,15 @@ def eval_genomes(genomes, config):
 
         #train the network
         epoch = 0
+        lr_total_reduce_times = 3  # times lr reduce to its 0.1
+        lr_reduce_times = 0  # current times lr reduced
 
-        #num_loss = 0
-        #last_running_loss = 0.0
+        precision_count = 0
+        precision_count_max = 5
+        best_precision = 0.0
+
+        evaluate_and_print_interval = 10
+
         training = True
         train_epoch = max_epoch
         while training and epoch < train_epoch:  # loop over the dataset multiple times
@@ -206,9 +219,14 @@ def eval_genomes(genomes, config):
             running_loss = 0.0
             correct = 0
             total = 0
+
+            #cur_lr = get_adjusted_lr(epoch)
+            #optimizer = optim.SGD(net.parameters(), cur_lr, momentum=0.9, weight_decay=1e-4, nesterov=True)
+            #print('Epoch {0}: {1:1.6f}'.format(epoch, cur_lr))
+
             print('Epoch: %d' % epoch)
 
-            if (train_epoch > 3) and (epoch % (train_epoch // 3) == 0):
+            if (train_epoch > lr_total_reduce_times) and (epoch % (train_epoch // lr_total_reduce_times) == 0):
                 lr /= 10
                 optimizer = optim.SGD(net.parameters(), lr, momentum=0.9)
                 print("Learning rate set to: {0:1.4f}".format(lr))
@@ -240,7 +258,7 @@ def eval_genomes(genomes, config):
                 #num_loss += 1
 
                 # print statistics
-                if i % 100 == 0:  # print every 50 mini-batches
+                if i % 100 == 0:  # print every 100 mini-batches
                     print(i, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                           % (running_loss / (i + 1), 100. * correct / total, correct, total))
 
@@ -263,11 +281,13 @@ def eval_genomes(genomes, config):
             """
             # print precision every 10 epoch
 
-            if epoch % 10 == 9:
+            if epoch % evaluate_and_print_interval == (evaluate_and_print_interval - 1):
                 fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)
                 fitness_test = eval_fitness(net, testloader, 0, torch_batch_size, 0, gpu)
                 print('Epoch {3:d}: {0:3.3f}, {1:3.3f}, {2}'.format(fitness_evaluate, fitness_test, genome_id, epoch))
-
+                ep = open("epoch.csv", "a")
+                ep.write("{0}, {1:d}, {2:3.3f}, {3:3.3f}, {4:3.6f}\n".format(genome_id, epoch, fitness_evaluate, fitness_test, lr))
+                ep.close()
             # reload run parameters
 
         print('Finished Training')
@@ -323,6 +343,7 @@ def eval_genomes(genomes, config):
 
         #save the best net on test set
         if fitness_test > best_on_test_set:
+            best_on_test_set = fitness_test
             torch.save(net, "best.pkl")
 
         best_every_generation.append((fitness_train, fitness_evaluate, fitness_test, genome_id, lr))
@@ -377,6 +398,9 @@ best.close()
 comp = open("comp.csv", "w")
 comp.write("num,before,after_train,after_eva,after_test,id,lr,delta\n")
 comp.close()
+ep = open("epoch.csv", "w")
+ep.write("id,epoch,eva,test,lr\n")
+ep.close()
 
 # Create the population, which is the top-level object for a NEAT run.
 p = neat.Population(config)
