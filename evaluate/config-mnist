@@ -3,7 +3,7 @@
 [NEAT]
 fitness_criterion     = max
 fitness_threshold     = 0.98
-pop_size              = 12
+pop_size              = 8
 reset_on_extinction   = False
 
 [DefaultGenome]
@@ -83,14 +83,15 @@ kernal_replace_rate     = 0.01
 kernal_size             = 9
 
 # layer information
-num_layer               = 70
-num_cnn_layer           = 68
+num_layer               = 25
+num_cnn_layer           = 23
 input_size              = 32
 init_channel_num        = 32
 num_downsampling        = 4
+num_dense_layer          = 4
 
 [DefaultSpeciesSet]
-compatibility_threshold = 4
+compatibility_threshold = 4.95
 
 [DefaultStagnation]
 species_fitness_func = max

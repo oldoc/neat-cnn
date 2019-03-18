@@ -49,6 +49,7 @@ class DefaultGenomeConfig(object):
                         ConfigParameter('input_size', int),
                         ConfigParameter('init_channel_num', int),
                         ConfigParameter('num_downsampling', int),
+                        ConfigParameter('num_dense_layer', int),
                         ConfigParameter('full_connect_input', bool)]
 
         # Gather configuration data from the gene classes.
@@ -856,10 +857,20 @@ class DefaultGenome(object):
             for input_id in config.input_keys:
                 connections.append((input_id, node))
 
+        '''#Add dense connection 2019.3.18
+        for i in range(len(self.layer) - 1):
+            for j in (range(config.num_dense_layer)):
+                if i+j+1 < len(self.layer):
+                    for node1 in self.layer[i][1]:
+                        for node2 in self.layer[i+j+1][1]:
+                            connections.append((node1, node2))
+        '''
+        # Original none dense connention
         for i in range(len(self.layer) - 1):
              for node1 in self.layer[i][1]:
                     for node2 in self.layer[i+1][1]:
                         connections.append((node1, node2))
+
 
         # For recurrent genomes, include node self-connections.
         if not config.feed_forward:

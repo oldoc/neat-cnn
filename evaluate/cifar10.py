@@ -27,6 +27,78 @@ transform = transforms.Compose(
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 """
 
+# Cutout data enhance
+class Cutout(object):
+    """Randomly mask out one or more patches from an image.
+    Args:
+        n_holes (int): Number of patches to cut out of each image.
+        length (int): The length (in pixels) of each square patch.
+    """
+    def __init__(self, n_holes, length):
+        self.n_holes = n_holes
+        self.length = length
+
+    def __call__(self, img):
+        """
+        Args:
+            img (Tensor): Tensor image of size (C, H, W).
+        Returns:
+            Tensor: Image with n_holes of dimension length x length cut out of it.
+        """
+        h = img.size(1)
+        w = img.size(2)
+
+        mask = np.ones((h, w), np.float32)
+
+        for n in range(self.n_holes):
+        	# (x,y)表示方形补丁的中心位置
+            y = np.random.randint(h)
+            x = np.random.randint(w)
+
+            y1 = np.clip(y - self.length // 2, 0, h)
+            y2 = np.clip(y + self.length // 2, 0, h)
+            x1 = np.clip(x - self.length // 2, 0, w)
+            x2 = np.clip(x + self.length // 2, 0, w)
+
+            mask[y1: y2, x1: x2] = 0.
+
+        mask = torch.from_numpy(mask)
+        mask = mask.expand_as(img)
+        img = img * mask
+
+        return img
+
+# Data enhance
+cifar_norm_mean = (0.49139968, 0.48215827, 0.44653124)
+cifar_norm_std = (0.24703233, 0.24348505, 0.26158768)
+
+'''
+# Data enhance without cutout
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(cifar_norm_mean, cifar_norm_std),
+])
+'''
+
+# Data enhance with cutout
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(cifar_norm_mean, cifar_norm_std),
+    Cutout(n_holes=1, length=16)
+])
+
+
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(cifar_norm_mean, cifar_norm_std),
+])
+
+'''
+# Data normalization
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
@@ -38,6 +110,7 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
+'''
 
 torch_batch_size = 100
 
@@ -84,6 +157,26 @@ def get_adjusted_lr(epoch, T_0=150, T_mult=1, eta_max=0.1, eta_min=0.):
     T_i = (T_0 * T_mult ** i)
     cur_lr = eta_min + 0.5 * (eta_max - eta_min) * (1 + np.cos(np.pi * T_cur / T_i))
     return cur_lr
+
+def mixup_data(x, y, alpha=1.0, use_cuda=True):
+    '''Returns mixed inputs, pairs of targets, and lambda'''
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+
+    batch_size = x.size()[0]
+    if use_cuda:
+        index = torch.randperm(batch_size).cuda()
+    else:
+        index = torch.randperm(batch_size)
+
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 # evaluate the fitness
 # batch_size = 0 means evaluate until reach the end of the evaluate set
@@ -182,7 +275,6 @@ def eval_genomes(genomes, config):
         else:
             net = evaluate_torch.Net(config, genome, True)
 
-
         if gpu:
             net.cuda()
 
@@ -231,6 +323,8 @@ def eval_genomes(genomes, config):
                 optimizer = optim.SGD(net.parameters(), lr, momentum=0.9)
                 print("Learning rate set to: {0:1.4f}".format(lr))
 
+            mixup = True  # If use mixup or not
+
             for i, data in enumerate(trainloader, 0):
                 # get the inputs
                 inputs, labels = data
@@ -241,12 +335,19 @@ def eval_genomes(genomes, config):
                 else:
                     inputs, labels = inputs.to("cpu"), labels.to("cpu")
 
+                # Mixup
+                if mixup:
+                    inputs, labels_a, labels_b, lam = mixup_data(inputs, labels, 1.)
+
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
                 # forward + backward + optimize
                 outputs = net(inputs)
-                loss = criterion(outputs, labels)
+                if mixup:
+                    loss = mixup_criterion(criterion, outputs, labels_a, labels_b, lam)
+                else:
+                    loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
 

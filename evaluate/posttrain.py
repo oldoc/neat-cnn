@@ -91,6 +91,7 @@ transform_train = transforms.Compose([
     Cutout(n_holes=1, length=16)
 ])
 
+
 transform_test = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(cifar_norm_mean, cifar_norm_std),
