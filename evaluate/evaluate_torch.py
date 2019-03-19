@@ -18,36 +18,98 @@ import neat.genome
 import numpy as np
 
 
-class cnn_block(nn.Module):
-    '''Depthwise conv + Pointwise conv'''
-    def __init__(self, in_planes, out_planes, stride=1):
-        super(cnn_block, self).__init__()
-        #Add for shortcut
-        self.stride = stride
 
+class cnn_block(nn.Module):
+
+    layerout = list()
+    downsampling_time = list()
+    num_dense_layer = 0
+
+    '''Depthwise conv + Pointwise conv'''
+    def __init__(self, downsampling_time, num_dense_layer, in_planes, out_planes, stride=1):
+        super(cnn_block, self).__init__()
+
+        self.bn1 = nn.BatchNorm2d(in_planes)
         self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=True)
-        self.bn1 = nn.BatchNorm2d(out_planes)
-        self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.bn2 = nn.BatchNorm2d(out_planes)
+        self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
+        self.num_dense_layer = num_dense_layer
+        self.downsampling_time = downsampling_time
         #self.dropout = nn.Dropout2d(p=0.1)
 
-        # Add short cut. 2019.2.19
-        self.shortcut = nn.Sequential()
-        if stride == 1 and in_planes != out_planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False),
-                nn.BatchNorm2d(out_planes),
-            )
+    def clear_layerout(self):
+        self.layerout.clear()
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        #out = F.relu(self.bn2(self.dropout(self.conv2(out))))
-        #out = F.relu(self.bn2(self.conv2(out)))
-        out = self.bn2(self.conv2(out))
 
-        # Add short cut. 2019.2.19
-        out = out + self.shortcut(x) if self.stride == 1 else out
+        layer_num = len(self.layerout)
+
+        if layer_num == 0:
+
+            out = self.conv1(F.relu(self.bn1(x)))
+            out = self.conv2(F.relu(self.bn2(out)))
+
+            self.layerout.append(x)
+            self.layerout.append(out)
+
+            return out
+        else:
+
+            former_layers = list()
+            former_layers_downsampling_time = list()
+
+            # Save the former num_dense_layer layers with its downsampling tiems
+            if layer_num <= self.num_dense_layer:
+                former_layers.append(self.layerout[0])
+                former_layers_downsampling_time.append(0)
+                for i in range(1, layer_num):
+                    former_layers.append(self.layerout[i])
+                    former_layers_downsampling_time.append(self.downsampling_time[i-1])
+            else:
+                for i in range(self.num_dense_layer):
+                    former_layers.append(self.layerout[layer_num-self.num_dense_layer+i])
+                    former_layers_downsampling_time.append(self.downsampling_time[layer_num-self.num_dense_layer+i-1])
+
+            # Computer the feature map downsampling times
+            for i in range(len(former_layers_downsampling_time)):
+                former_layers_downsampling_time[i] = former_layers_downsampling_time[-1] - former_layers_downsampling_time[i]
+                while former_layers_downsampling_time[i] > 0:
+                    former_layers[i] = F.avg_pool2d(former_layers[i], 2)
+                    former_layers_downsampling_time[i] -= 1
+
+            # Concatnate the input
+            if layer_num <= self.num_dense_layer:
+                input = former_layers[0]
+                for i in range(1, len(former_layers_downsampling_time)):
+                    input = torch.cat([input, former_layers[i]], 1)
+            else:
+                input = former_layers[0]
+                for i in range(1, self.num_dense_layer):
+                    input = torch.cat([input, former_layers[i]], 1)
+
+            out = self.conv1(F.relu(self.bn1(input)))
+            out = self.conv2(F.relu(self.bn2(out)))
+
+            size = out.size
+
+            self.layerout.append(out)
+
+            return out
+'''
+class Bottleneck(nn.Module):
+    def __init__(self, in_planes, growth_rate):
+        super(Bottleneck, self).__init__()
+        self.bn1 = nn.BatchNorm2d(in_planes)
+        self.conv1 = nn.Conv2d(in_planes, 4*growth_rate, kernel_size=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(4*growth_rate)
+        self.conv2 = nn.Conv2d(4*growth_rate, growth_rate, kernel_size=3, padding=1, bias=False)
+
+    def forward(self, x):
+        out = self.conv1(F.relu(self.bn1(x)))
+        out = self.conv2(F.relu(self.bn2(out)))
+        out = torch.cat([out,x], 1)
         return out
+'''
 
 class fc_block(nn.Module):
     def __init__(self, in_planes, out_planes):
@@ -82,16 +144,21 @@ class Net(nn.Module):
         self.num_downsampling = config.genome_config.num_downsampling
 
         self.downsampling_mask = genome.downsampling_mask
+        self.downsampling_time = genome.downsampling_time
         self.nodes_every_layers = genome.nodes_every_layers
+        self.num_dense_layer = config.genome_config.num_dense_layer
+
+        #self.out = list()
 
         cfg = self.setup_cfg()
 
-        self.cnn_layers = self._make_cnn_layers(cfg, self.num_inputs)
+        self.cnn_layers = self._make_cnn_layers(cfg)
         self.fc_layers = self._make_fc_layers()
         #self.clear_parameters() #Note! Should not clear parameters!
 
-        if set_parameters:
-            self.set_parameters(genome)
+        # TODO: add set parameters
+        #if set_parameters:
+        #    self.set_parameters(genome)
 
     def setup_cfg(self):
         cfg = list()
@@ -103,14 +170,24 @@ class Net(nn.Module):
                 cfg.append(self.nodes_every_layers[i])
         return cfg
 
-    def _make_cnn_layers(self, cfg, in_planes):
+    def _make_cnn_layers(self, cfg):
+
         layers = []
+
         for i in range(self.num_cnn_layer):
+            if i < self.num_dense_layer:
+                in_planes = self.num_inputs
+                for j in range(i):
+                    in_planes += self.nodes_every_layers[j]
+            else:
+                in_planes = 0
+                for j in range(self.num_dense_layer):
+                    in_planes += self.nodes_every_layers[i-j-1]
+
             x = cfg[i]
-            out_planes = x if isinstance(x, int) else x[0]
+            out_planes = self.nodes_every_layers[i]
             stride = 1 if isinstance(x, int) else x[1]
-            layers.append(cnn_block(in_planes, out_planes, stride))
-            in_planes = out_planes
+            layers.append(cnn_block(self.downsampling_time, self.num_dense_layer, in_planes, out_planes, stride))
         return nn.Sequential(*layers)
 
     def _make_fc_layers(self):
@@ -135,6 +212,7 @@ class Net(nn.Module):
                     block.bias.data.fill_(0.0)
     """
     def forward(self, x):
+        cnn_block.clear_layerout(cnn_block)
         out = self.cnn_layers(x)
         out = F.avg_pool2d(out, self.input_size // (2 ** self.num_downsampling))
         out = out.view(out.size(0), -1)

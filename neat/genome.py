@@ -212,6 +212,14 @@ class DefaultGenome(object):
                 else:
                     self.downsampling_mask[i] = 0
 
+            # Convert downsampling mask to downsampling num list
+            times = 0
+            self.downsampling_time = [0] * config.num_layer
+            for i in range(config.num_layer):
+                if self.downsampling_mask[i] == 1:
+                    times += 1
+                self.downsampling_time[i] = times
+
         # Fitness results.
         self.fitness = None
 
@@ -498,6 +506,7 @@ class DefaultGenome(object):
     # Add a node to the network, if the added node in the first layer then judge if should add a full connection
     # to all the input. Then add one connection to the former layer and one to the after layer.
     # Note: The node cannot be added to the last layer!
+    # TODO: Add connection according to the conncetion type parameter in the config file
     def mutate_add_node(self, config):
         num = 0
         for i in range(config.node_add_num):
@@ -515,27 +524,74 @@ class DefaultGenome(object):
             self.nodes[new_node_id] = ng
 
             # if the added node in first layer
-            if layer_num == 0:
+            connections = []
+            '''
+            if layer_num == 0: #TODO: Add connections to the following layers
                 # Add full connection between input and the first layer
                 if config.full_connect_input:
                     for input_id in config.input_keys:
-                        connection = self.create_connection(config, input_id, new_node_id)
-                        self.connections[connection.key] = connection
+                        connections.append((input_id, new_node_id))
+
                 # Add one connction between input and the first layer
                 else:
                     input_id = choice(config.input_keys)
-                    connection = self.create_connection(config, input_id, new_node_id)
-                    self.connections[connection.key] = connection
-            # Not the first layer node, and one connection to a node in the former layer
-            else:
-                node_id = choice(list(self.layer[layer_num - 1][1]))
-                connection = self.create_connection(config, node_id, new_node_id)
+                    connections.append((input_id, new_node_id))
+            '''
+
+            # Add connection to input, if the added node layer not more than num_dense_layer
+            if layer_num < config.num_dense_layer:
+                for input_id in config.input_keys:
+                    connections.append((input_id, new_node_id))
+
+            #node_id = choice(list(self.layer[layer_num - 1][1]))
+            #connection = self.create_connection(config, node_id, new_node_id)
+            #self.connections[connection.key] = connection
+
+            # Add to support dense connection. by Andrew 2019.3.18
+            left = 1
+            right = layer_num if layer_num < config.num_dense_layer else config.num_dense_layer
+
+            for i in range(left, right + 1):
+                for j in list(self.layer[layer_num - i][1]):
+                    connections.append((j, new_node_id))
+                '''
+                in_node_layer_distance = randint(left, right)
+                in_node = choice()
+                connection = self.create_connection(config, in_node, new_node_id)
                 self.connections[connection.key] = connection
+                '''
 
             # Add one connection to a node in the after layer
-            node_id = choice(list(self.layer[layer_num + 1][1]))
-            connection = self.create_connection(config, new_node_id, node_id)
+            #node_id = choice(list(self.layer[layer_num + 1][1]))
+            #connection = self.create_connection(config, new_node_id, node_id)
+            #self.connections[connection.key] = connection
+
+            left = 1
+            right = (config.num_layer - layer_num - 1) if (layer_num + config.num_dense_layer > config.num_layer - 1) else config.num_dense_layer
+            for i in range(left, right + 1):
+                for j in list(self.layer[layer_num + i][1]):
+                    connections.append((new_node_id, j))
+
+            if config.initial_connection == 'full':
+                for node1, node2 in connections:
+                    connection = self.create_connection(config, node1, node2)
+                    self.connections[connection.key] = connection
+            elif config.initial_connection == 'partial':
+                assert 0 <= config.connection_fraction <= 1
+                shuffle(connections)
+                num_to_add = int(round(len(connections) * config.connection_fraction))
+                for input_id, output_id in connections[:num_to_add]:
+                    connection = self.create_connection(config, input_id, output_id)
+                    self.connections[connection.key] = connection
+            else:
+                print("Only full and partial connection allowed in CNN!")
+            '''
+            out_node_layer_distance = randint(left, right)
+            out_node = choice(list(self.layer[layer_num + out_node_layer_distance][1]))
+            connection = self.create_connection(config, new_node_id, out_node)
             self.connections[connection.key] = connection
+            '''
+
         print("{0} nodes added!".format(num))
 
     """
@@ -613,7 +669,8 @@ class DefaultGenome(object):
     """
     # Added by Andrew @20181107
     # Add a connection to the network.
-    # TODO: Make sure the in_node is in the smaller layer, and out_node in the next layer
+    # TODO: Add connection with the probability according to its connections already has.
+    # TODO: Add connection according to the conncetion type parameter in the config file
     def mutate_add_connection(self, config):
         num = 0
         for i in range(config.conn_add_num):
@@ -621,13 +678,18 @@ class DefaultGenome(object):
             # Choose the outnode layer
             layer_num = randint(0, config.num_layer - 1)
 
-            # If choose out_node form the first layer, the input_node should choose from input ot the network.
+            # If choose out_node form the first layer, the input_node should choose from input of the network.
             if layer_num == 0:
                 out_node = choice(list(self.layer[layer_num][1]))
                 in_node = choice(config.input_keys)
             else:
                 out_node = choice(list(self.layer[layer_num][1]))
-                in_node = choice(list(self.layer[layer_num - 1][1]))
+                #in_node = choice(list(self.layer[layer_num - 1][1]))
+                # Changed to support dense connection. by Andrew 2019.3.18
+                left = 1
+                right = layer_num if layer_num < config.num_dense_layer else config.num_dense_layer
+                in_node_layer_distance = randint(left, right)
+                in_node = choice(list(self.layer[layer_num - in_node_layer_distance][1]))
 
             # Don't duplicate connections.
             key = (in_node, out_node)
@@ -857,7 +919,7 @@ class DefaultGenome(object):
             for input_id in config.input_keys:
                 connections.append((input_id, node))
 
-        '''#Add dense connection 2019.3.18
+        #Add dense connection 2019.3.18
         for i in range(len(self.layer) - 1):
             for j in (range(config.num_dense_layer)):
                 if i+j+1 < len(self.layer):
@@ -870,7 +932,7 @@ class DefaultGenome(object):
              for node1 in self.layer[i][1]:
                     for node2 in self.layer[i+1][1]:
                         connections.append((node1, node2))
-
+        '''
 
         # For recurrent genomes, include node self-connections.
         if not config.feed_forward:

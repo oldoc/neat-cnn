@@ -1,3 +1,14 @@
 
  ****** Running generation 0 ****** 
 
+Population's average fitness: 0.27368 stdev: 0.02186
+Best fitness: 0.31030 - size: (2666, 1227312) - species 1 - id 2
+Population of 4 members in 1 species:
+   ID   age  size  fitness  adj fit  stag
+  ====  ===  ====  =======  =======  ====
+     1    0     4      0.3    0.020     0
+Total extinctions: 0
+Generation time: 484.379 sec
+
+ ****** Running generation 1 ****** 
+

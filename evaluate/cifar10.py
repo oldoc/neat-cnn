@@ -72,7 +72,7 @@ class Cutout(object):
 cifar_norm_mean = (0.49139968, 0.48215827, 0.44653124)
 cifar_norm_std = (0.24703233, 0.24348505, 0.26158768)
 
-'''
+
 # Data enhance without cutout
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
@@ -90,7 +90,7 @@ transform_train = transforms.Compose([
     transforms.Normalize(cifar_norm_mean, cifar_norm_std),
     Cutout(n_holes=1, length=16)
 ])
-
+'''
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
@@ -118,7 +118,7 @@ gpu = False
 
 first_time = True
 
-best_on_test_set = 0.9
+best_on_test_set = 0.8
 
 #net_dict = {}
 
@@ -321,9 +321,9 @@ def eval_genomes(genomes, config):
             if (train_epoch > lr_total_reduce_times) and (epoch % (train_epoch // lr_total_reduce_times) == 0):
                 lr /= 10
                 optimizer = optim.SGD(net.parameters(), lr, momentum=0.9)
-                print("Learning rate set to: {0:1.4f}".format(lr))
+                print("Learning rate set to: {0:1.8f}".format(lr))
 
-            mixup = True  # If use mixup or not
+            mixup = False  # If use mixup or not
 
             for i, data in enumerate(trainloader, 0):
                 # get the inputs
@@ -395,7 +395,8 @@ def eval_genomes(genomes, config):
 
         #evaluate the fitness
 
-        net.write_back_parameters(genome)
+        # TODO: add write back
+        #net.write_back_parameters(genome)
 
         fitness_train = eval_fitness(net, trainloader, 0, torch_batch_size, 0, gpu)
         fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)
