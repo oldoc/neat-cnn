@@ -83,10 +83,10 @@ kernal_replace_rate     = 0.01
 kernal_size             = 9
 
 # layer information
-num_layer               = 30
-num_cnn_layer           = 28
+num_layer               = 70
+num_cnn_layer           = 68
 input_size              = 32
-init_channel_num        = 16
+init_channel_num        = 8
 num_downsampling        = 4
 num_dense_layer         = 4
 

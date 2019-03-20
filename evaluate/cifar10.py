@@ -393,10 +393,8 @@ def eval_genomes(genomes, config):
 
         print('Finished Training')
 
-        #evaluate the fitness
-
-        # TODO: add write back
-        #net.write_back_parameters(genome)
+        # Write back parameters to NEAT
+        net.write_back_parameters(genome)
 
         fitness_train = eval_fitness(net, trainloader, 0, torch_batch_size, 0, gpu)
         fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)

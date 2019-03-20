@@ -915,17 +915,25 @@ class DefaultGenome(object):
         """
         connections = []
 
-        for node in self.layer[0][1]:
-            for input_id in config.input_keys:
-                connections.append((input_id, node))
+        # Revised to add dense connections from input to the following num_dense_layers
+        for i in range(config.num_dense_layer):
+            for node in self.layer[i][1]:
+                for input_id in config.input_keys:
+                    connections.append((input_id, node))
 
         #Add dense connection 2019.3.18
-        for i in range(len(self.layer) - 1):
+        for i in range(config.num_cnn_layer - 1):
             for j in (range(config.num_dense_layer)):
-                if i+j+1 < len(self.layer):
+                if i+j+1 < config.num_cnn_layer:
                     for node1 in self.layer[i][1]:
                         for node2 in self.layer[i+j+1][1]:
                             connections.append((node1, node2))
+
+        for i in range(config.num_cnn_layer - 1, config.num_layer - 1):
+            for node1 in self.layer[i][1]:
+                for node2 in self.layer[i + 1][1]:
+                    connections.append((node1, node2))
+
         '''
         # Original none dense connention
         for i in range(len(self.layer) - 1):

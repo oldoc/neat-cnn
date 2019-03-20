@@ -4,6 +4,8 @@ Created on 2018-12-04 10:23:06
 
 @author: AN Zhulin
 """
+
+# TODO: add connection form input to the first num_dense_layer layers in NEAT!
 import sys,os
 curPath = os.path.abspath(os.path.dirname(__file__))
 parentPath = os.path.split(curPath)[0]
@@ -16,8 +18,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import neat.genome
 import numpy as np
-
-
 
 class cnn_block(nn.Module):
 
@@ -90,8 +90,6 @@ class cnn_block(nn.Module):
             out = self.conv1(F.relu(self.bn1(input)))
             out = self.conv2(F.relu(self.bn2(out)))
 
-            size = out.size
-
             self.layerout.append(out)
 
             return out
@@ -156,9 +154,8 @@ class Net(nn.Module):
         self.fc_layers = self._make_fc_layers()
         #self.clear_parameters() #Note! Should not clear parameters!
 
-        # TODO: add set parameters
-        #if set_parameters:
-        #    self.set_parameters(genome)
+        if set_parameters:
+            self.set_parameters(genome)
 
     def setup_cfg(self):
         cfg = list()
@@ -261,13 +258,33 @@ class Net(nn.Module):
 
         for in_node, out_node in genome.connections:
 
-            c = nodes[out_node][0]  # layer number
+            c = nodes[out_node][0]  # out_node layer number
+            s = nodes[in_node][0]   # in_node layer number
+
+            '''
+            if c >= self.num_cnn_layer and c - s > 1:
+                break;
+            '''
+
             if c < self.num_cnn_layer:  # cnn layer
                 layer_num = 2 * c
             else:                       # fc layer
                 layer_num = self.num_cnn_layer + c
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
+
+            # Added when using dense conncetion
+            addition_num = 0
+            for i in range(s+1, c):
+                addition_num += self.nodes_every_layers[i]
+
+            if s >= 0:
+                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+            elif s == -1:
+                weight_num = -(self.num_inputs - weight_num + addition_num)
+            else:
+                raise RuntimeError("Error layer number!")
+
             (layer[layer_num].weight.data[weight_tensor_num])[weight_num] = \
                 torch.FloatTensor([genome.connections[(in_node, out_node)].weight])
             """
@@ -320,13 +337,27 @@ class Net(nn.Module):
 
         for in_node, out_node in genome.connections:
 
-            c = nodes[out_node][0]  # layer number
+            c = nodes[out_node][0]  # out_node layer number
+            s = nodes[in_node][0]   # in_node layer number
             if c < self.num_cnn_layer:  # cnn layer
                 layer_num = 2 * c
-            else:
+            else:                       # fc layer
                 layer_num = self.num_cnn_layer + c
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
+
+            # Added when using dense conncetion
+            addition_num = 0
+            for i in range(s+1, c):
+                addition_num += self.nodes_every_layers[i]
+
+            if s >= 0:
+                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+            elif s == -1:
+                weight_num = -(self.num_inputs - weight_num + addition_num)
+            else:
+                raise RuntimeError("Error layer number!")
+
             genome.connections[(in_node, out_node)].weight = \
                 (layer[layer_num].weight.data[weight_tensor_num])[weight_num].item()
 
