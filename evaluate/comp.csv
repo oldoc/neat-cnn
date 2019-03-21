@@ -1,2 +1,1 @@
 num,before,after_train,after_eva,after_test,id,lr,delta
-1,0.098,0.195,0.203,0.206,1,0.000001

@@ -35,6 +35,7 @@ class cnn_block(nn.Module):
         self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.num_dense_layer = num_dense_layer
         self.downsampling_time = downsampling_time
+
         #self.dropout = nn.Dropout2d(p=0.1)
 
     def clear_layerout(self):
@@ -114,6 +115,7 @@ class fc_block(nn.Module):
         super(fc_block, self).__init__()
         self.fc = nn.Linear(in_planes, out_planes)
         self.bn = nn.BatchNorm1d(out_planes)
+
         #self.dropout = nn.Dropout(p=0.25)
 
     def forward(self, x):
@@ -189,7 +191,13 @@ class Net(nn.Module):
 
     def _make_fc_layers(self):
         layers = []
-        for i in range(self.num_cnn_layer, self.num_layer):
+        in_planes = 0
+        for i in range(self.num_dense_layer):
+            in_planes += self.nodes_every_layers[self.num_cnn_layer-1-i]
+
+        layers.append(fc_block(in_planes, self.nodes_every_layers[self.num_cnn_layer]))
+
+        for i in range(self.num_cnn_layer + 1, self.num_layer):
             layers.append(fc_block(self.nodes_every_layers[i-1], self.nodes_every_layers[i]))
         return nn.Sequential(*layers)
 
@@ -211,7 +219,30 @@ class Net(nn.Module):
     def forward(self, x):
         cnn_block.clear_layerout(cnn_block)
         out = self.cnn_layers(x)
-        out = F.avg_pool2d(out, self.input_size // (2 ** self.num_downsampling))
+
+        former_layers = list()
+        former_layers_downsampling_time = list()
+
+        # Save the former num_dense_layer layers with its downsampling tiems
+
+        for i in range(self.num_dense_layer):
+            former_layers.append(cnn_block.layerout[self.num_cnn_layer - self.num_dense_layer+1+i])
+            former_layers_downsampling_time.append(self.downsampling_time[self.num_cnn_layer - self.num_dense_layer + i])
+
+        # Computer the feature map downsampling times
+        for i in range(len(former_layers_downsampling_time)):
+            former_layers_downsampling_time[i] = former_layers_downsampling_time[-1] - \
+                                                 former_layers_downsampling_time[i]
+            while former_layers_downsampling_time[i] > 0:
+                former_layers[i] = F.avg_pool2d(former_layers[i], 2)
+                former_layers_downsampling_time[i] -= 1
+
+        # Concatnate the input
+        input = former_layers[0]
+        for i in range(1, self.num_dense_layer):
+            input = torch.cat([input, former_layers[i]], 1)
+
+        out = F.avg_pool2d(input, self.input_size // (2 ** self.num_downsampling))
         out = out.view(out.size(0), -1)
         out = self.fc_layers(out)
         return out
