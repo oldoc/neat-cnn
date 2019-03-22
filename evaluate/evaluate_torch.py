@@ -35,6 +35,7 @@ class cnn_block(nn.Module):
         self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.num_dense_layer = num_dense_layer
         self.downsampling_time = downsampling_time
+
         #self.dropout = nn.Dropout2d(p=0.1)
 
     def clear_layerout(self):
@@ -114,6 +115,7 @@ class fc_block(nn.Module):
         super(fc_block, self).__init__()
         self.fc = nn.Linear(in_planes, out_planes)
         self.bn = nn.BatchNorm1d(out_planes)
+
         #self.dropout = nn.Dropout(p=0.25)
 
     def forward(self, x):
@@ -154,8 +156,8 @@ class Net(nn.Module):
         self.fc_layers = self._make_fc_layers()
         #self.clear_parameters() #Note! Should not clear parameters!
 
-        if set_parameters:
-            self.set_parameters(genome)
+        #if set_parameters:
+        self.set_parameters(genome)
 
     def setup_cfg(self):
         cfg = list()
@@ -189,7 +191,13 @@ class Net(nn.Module):
 
     def _make_fc_layers(self):
         layers = []
-        for i in range(self.num_cnn_layer, self.num_layer):
+        in_planes = 0
+        for i in range(self.num_dense_layer):
+            in_planes += self.nodes_every_layers[self.num_cnn_layer-1-i]
+
+        layers.append(fc_block(in_planes, self.nodes_every_layers[self.num_cnn_layer]))
+
+        for i in range(self.num_cnn_layer + 1, self.num_layer):
             layers.append(fc_block(self.nodes_every_layers[i-1], self.nodes_every_layers[i]))
         return nn.Sequential(*layers)
 
@@ -211,7 +219,30 @@ class Net(nn.Module):
     def forward(self, x):
         cnn_block.clear_layerout(cnn_block)
         out = self.cnn_layers(x)
-        out = F.avg_pool2d(out, self.input_size // (2 ** self.num_downsampling))
+
+        former_layers = list()
+        former_layers_downsampling_time = list()
+
+        # Save the former num_dense_layer layers with its downsampling tiems
+
+        for i in range(self.num_dense_layer):
+            former_layers.append(cnn_block.layerout[self.num_cnn_layer - self.num_dense_layer+1+i])
+            former_layers_downsampling_time.append(self.downsampling_time[self.num_cnn_layer - self.num_dense_layer + i])
+
+        # Computer the feature map downsampling times
+        for i in range(len(former_layers_downsampling_time)):
+            former_layers_downsampling_time[i] = former_layers_downsampling_time[-1] - \
+                                                 former_layers_downsampling_time[i]
+            while former_layers_downsampling_time[i] > 0:
+                former_layers[i] = F.avg_pool2d(former_layers[i], 2)
+                former_layers_downsampling_time[i] -= 1
+
+        # Concatnate the input
+        input = former_layers[0]
+        for i in range(1, self.num_dense_layer):
+            input = torch.cat([input, former_layers[i]], 1)
+
+        out = F.avg_pool2d(input, self.input_size // (2 ** self.num_downsampling))
         out = out.view(out.size(0), -1)
         out = self.fc_layers(out)
         return out
@@ -261,6 +292,8 @@ class Net(nn.Module):
             c = nodes[out_node][0]  # out_node layer number
             s = nodes[in_node][0]   # in_node layer number
 
+            # print("({0}, {1})".format(in_node, out_node))
+
             '''
             if c >= self.num_cnn_layer and c - s > 1:
                 break;
@@ -273,17 +306,18 @@ class Net(nn.Module):
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
 
-            # Added when using dense conncetion
-            addition_num = 0
-            for i in range(s+1, c):
-                addition_num += self.nodes_every_layers[i]
+            if c <= self.num_cnn_layer: #if not the layers after the first fc layer
+                # Added when using dense conncetion
+                addition_num = 0
+                for i in range(s+1, c):
+                    addition_num += self.nodes_every_layers[i]
 
-            if s >= 0:
-                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
-            elif s == -1:
-                weight_num = -(self.num_inputs - weight_num + addition_num)
-            else:
-                raise RuntimeError("Error layer number!")
+                if s >= 0:
+                    weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+                elif s == -1:
+                    weight_num = -(self.num_inputs - weight_num + addition_num)
+                else:
+                    raise RuntimeError("Error layer number!")
 
             (layer[layer_num].weight.data[weight_tensor_num])[weight_num] = \
                 torch.FloatTensor([genome.connections[(in_node, out_node)].weight])
@@ -346,17 +380,18 @@ class Net(nn.Module):
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
 
-            # Added when using dense conncetion
-            addition_num = 0
-            for i in range(s+1, c):
-                addition_num += self.nodes_every_layers[i]
+            if c <= self.num_cnn_layer:  # if not the layers after the first fc layer
+                # Added when using dense conncetion
+                addition_num = 0
+                for i in range(s+1, c):
+                    addition_num += self.nodes_every_layers[i]
 
-            if s >= 0:
-                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
-            elif s == -1:
-                weight_num = -(self.num_inputs - weight_num + addition_num)
-            else:
-                raise RuntimeError("Error layer number!")
+                if s >= 0:
+                    weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+                elif s == -1:
+                    weight_num = -(self.num_inputs - weight_num + addition_num)
+                else:
+                    raise RuntimeError("Error layer number!")
 
             genome.connections[(in_node, out_node)].weight = \
                 (layer[layer_num].weight.data[weight_tensor_num])[weight_num].item()

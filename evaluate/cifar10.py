@@ -72,7 +72,6 @@ class Cutout(object):
 cifar_norm_mean = (0.49139968, 0.48215827, 0.44653124)
 cifar_norm_std = (0.24703233, 0.24348505, 0.26158768)
 
-
 # Data enhance without cutout
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
@@ -91,6 +90,7 @@ transform_train = transforms.Compose([
     Cutout(n_holes=1, length=16)
 ])
 '''
+
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
