@@ -292,6 +292,8 @@ class Net(nn.Module):
             c = nodes[out_node][0]  # out_node layer number
             s = nodes[in_node][0]   # in_node layer number
 
+            # print("({0}, {1})".format(in_node, out_node))
+
             '''
             if c >= self.num_cnn_layer and c - s > 1:
                 break;
@@ -304,17 +306,18 @@ class Net(nn.Module):
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
 
-            # Added when using dense conncetion
-            addition_num = 0
-            for i in range(s+1, c):
-                addition_num += self.nodes_every_layers[i]
+            if c <= self.num_cnn_layer: #if not the layers after the first fc layer
+                # Added when using dense conncetion
+                addition_num = 0
+                for i in range(s+1, c):
+                    addition_num += self.nodes_every_layers[i]
 
-            if s >= 0:
-                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
-            elif s == -1:
-                weight_num = -(self.num_inputs - weight_num + addition_num)
-            else:
-                raise RuntimeError("Error layer number!")
+                if s >= 0:
+                    weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+                elif s == -1:
+                    weight_num = -(self.num_inputs - weight_num + addition_num)
+                else:
+                    raise RuntimeError("Error layer number!")
 
             (layer[layer_num].weight.data[weight_tensor_num])[weight_num] = \
                 torch.FloatTensor([genome.connections[(in_node, out_node)].weight])
@@ -377,17 +380,18 @@ class Net(nn.Module):
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
 
-            # Added when using dense conncetion
-            addition_num = 0
-            for i in range(s+1, c):
-                addition_num += self.nodes_every_layers[i]
+            if c <= self.num_cnn_layer:  # if not the layers after the first fc layer
+                # Added when using dense conncetion
+                addition_num = 0
+                for i in range(s+1, c):
+                    addition_num += self.nodes_every_layers[i]
 
-            if s >= 0:
-                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
-            elif s == -1:
-                weight_num = -(self.num_inputs - weight_num + addition_num)
-            else:
-                raise RuntimeError("Error layer number!")
+                if s >= 0:
+                    weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+                elif s == -1:
+                    weight_num = -(self.num_inputs - weight_num + addition_num)
+                else:
+                    raise RuntimeError("Error layer number!")
 
             genome.connections[(in_node, out_node)].weight = \
                 (layer[layer_num].weight.data[weight_tensor_num])[weight_num].item()
