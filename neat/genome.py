@@ -548,29 +548,26 @@ class DefaultGenome(object):
             #self.connections[connection.key] = connection
 
             # Add to support dense connection. by Andrew 2019.3.18
-            left = 1
-            right = layer_num if layer_num < config.num_dense_layer else config.num_dense_layer
-
-            for i in range(left, right + 1):
-                for j in list(self.layer[layer_num - i][1]):
+            # Add connections to the layer before
+            if layer_num <= config.num_cnn_layer: # if the layer of the added node is in cnn layer or in the first fc layer
+                for i in (range(config.num_dense_layer)):
+                    if layer_num-i-1 >= 0:
+                        for j in list(self.layer[layer_num-i-1][1]):
+                            connections.append((j, new_node_id))
+            else:
+                for j in list(self.layer[layer_num - 1][1]):
                     connections.append((j, new_node_id))
-                '''
-                in_node_layer_distance = randint(left, right)
-                in_node = choice()
-                connection = self.create_connection(config, in_node, new_node_id)
-                self.connections[connection.key] = connection
-                '''
 
-            # Add one connection to a node in the after layer
-            #node_id = choice(list(self.layer[layer_num + 1][1]))
-            #connection = self.create_connection(config, new_node_id, node_id)
-            #self.connections[connection.key] = connection
-
-            left = 1
-            right = (config.num_layer - layer_num - 1) if (layer_num + config.num_dense_layer > config.num_layer - 1) else config.num_dense_layer
-            for i in range(left, right + 1):
-                for j in list(self.layer[layer_num + i][1]):
+            # Add connections to the layer after
+            if layer_num < config.num_cnn_layer: # if the layer of the added node is in cnn layer
+                for i in (range(config.num_dense_layer)):
+                    if layer_num+i+1 <= config.num_cnn_layer: # connect to following cnn layer or the first fc layer
+                        for j in list(self.layer[layer_num+i+1][1]):
+                            connections.append((new_node_id, j))
+            else: # the added node is in fc layers
+                for j in list(self.layer[layer_num + 1][1]):
                     connections.append((new_node_id, j))
+
 
             if config.initial_connection == 'full':
                 for node1, node2 in connections:
@@ -922,14 +919,14 @@ class DefaultGenome(object):
                     connections.append((input_id, node))
 
         #Add dense connection 2019.3.18
-        for i in range(config.num_cnn_layer - 1):
+        for i in range(config.num_cnn_layer):
             for j in (range(config.num_dense_layer)):
-                if i+j+1 < config.num_cnn_layer:
+                if i+j+1 <= config.num_cnn_layer: # "=" means including the first fc layer
                     for node1 in self.layer[i][1]:
                         for node2 in self.layer[i+j+1][1]:
                             connections.append((node1, node2))
 
-        for i in range(config.num_cnn_layer - 1, config.num_layer - 1):
+        for i in range(config.num_cnn_layer, config.num_layer - 1):
             for node1 in self.layer[i][1]:
                 for node2 in self.layer[i + 1][1]:
                     connections.append((node1, node2))
