@@ -156,8 +156,8 @@ class Net(nn.Module):
         self.fc_layers = self._make_fc_layers()
         #self.clear_parameters() #Note! Should not clear parameters!
 
-        if set_parameters:
-            self.set_parameters(genome)
+        #if set_parameters:
+        self.set_parameters(genome)
 
     def setup_cfg(self):
         cfg = list()
