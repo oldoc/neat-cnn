@@ -72,20 +72,45 @@ class Cutout(object):
 cifar_norm_mean = (0.49139968, 0.48215827, 0.44653124)
 cifar_norm_std = (0.24703233, 0.24348505, 0.26158768)
 
-
+'''
+# Data enhance without cutout
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize(cifar_norm_mean, cifar_norm_std),
-    Cutout(n_holes=1, length=16) # With cutout
 ])
+'''
+
+# Data enhance with cutout
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(cifar_norm_mean, cifar_norm_std),
+    Cutout(n_holes=1, length=16)
+])
+
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(cifar_norm_mean, cifar_norm_std),
 ])
 
+'''
+# Data normalization
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+])
+
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+])
+'''
 
 torch_batch_size = 100
 
@@ -93,7 +118,7 @@ gpu = False
 
 first_time = True
 
-best_on_test_set = 0.9
+best_on_test_set = 0.8
 
 #net_dict = {}
 
@@ -369,7 +394,7 @@ def eval_genomes(genomes, config):
         print('Finished Training')
 
         # Write back parameters to NEAT
-        net.write_back_parameters(genome)
+        # net.write_back_parameters(genome)
 
         fitness_train = eval_fitness(net, trainloader, 0, torch_batch_size, 0, gpu)
         fitness_evaluate = eval_fitness(net, evaluateloader, 0, torch_batch_size, 0, gpu)

@@ -29,10 +29,20 @@ class cnn_block(nn.Module):
     def __init__(self, downsampling_time, num_dense_layer, in_planes, out_planes, stride=1):
         super(cnn_block, self).__init__()
 
+        groupcov = True
+
+        if groupcov:
+            g = in_planes // out_planes
+
+            if g == 0:
+                g = 1
+        else:
+            g = 1
+
         self.bn1 = nn.BatchNorm2d(in_planes)
-        self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=True)
-        self.bn2 = nn.BatchNorm2d(out_planes)
-        self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
+        self.conv1 = nn.Conv2d(in_planes, g * out_planes, kernel_size=1, stride=1, padding=0, bias=True)
+        self.bn2 = nn.BatchNorm2d(g * out_planes)
+        self.conv2 = nn.Conv2d(g * out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
         self.num_dense_layer = num_dense_layer
         self.downsampling_time = downsampling_time
 
@@ -156,8 +166,8 @@ class Net(nn.Module):
         self.fc_layers = self._make_fc_layers()
         #self.clear_parameters() #Note! Should not clear parameters!
 
-        #if set_parameters:
-        self.set_parameters(genome)
+        # if set_parameters:
+            # self.set_parameters(genome)
 
     def setup_cfg(self):
         cfg = list()
@@ -292,8 +302,6 @@ class Net(nn.Module):
             c = nodes[out_node][0]  # out_node layer number
             s = nodes[in_node][0]   # in_node layer number
 
-            # print("({0}, {1})".format(in_node, out_node))
-
             '''
             if c >= self.num_cnn_layer and c - s > 1:
                 break;
@@ -306,18 +314,17 @@ class Net(nn.Module):
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
 
-            if c <= self.num_cnn_layer: #if not the layers after the first fc layer
-                # Added when using dense conncetion
-                addition_num = 0
-                for i in range(s+1, c):
-                    addition_num += self.nodes_every_layers[i]
+            # Added when using dense conncetion
+            addition_num = 0
+            for i in range(s+1, c):
+                addition_num += self.nodes_every_layers[i]
 
-                if s >= 0:
-                    weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
-                elif s == -1:
-                    weight_num = -(self.num_inputs - weight_num + addition_num)
-                else:
-                    raise RuntimeError("Error layer number!")
+            if s >= 0:
+                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+            elif s == -1:
+                weight_num = -(self.num_inputs - weight_num + addition_num)
+            else:
+                raise RuntimeError("Error layer number!")
 
             (layer[layer_num].weight.data[weight_tensor_num])[weight_num] = \
                 torch.FloatTensor([genome.connections[(in_node, out_node)].weight])
@@ -380,18 +387,17 @@ class Net(nn.Module):
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
 
-            if c <= self.num_cnn_layer:  # if not the layers after the first fc layer
-                # Added when using dense conncetion
-                addition_num = 0
-                for i in range(s+1, c):
-                    addition_num += self.nodes_every_layers[i]
+            # Added when using dense conncetion
+            addition_num = 0
+            for i in range(s+1, c):
+                addition_num += self.nodes_every_layers[i]
 
-                if s >= 0:
-                    weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
-                elif s == -1:
-                    weight_num = -(self.num_inputs - weight_num + addition_num)
-                else:
-                    raise RuntimeError("Error layer number!")
+            if s >= 0:
+                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+            elif s == -1:
+                weight_num = -(self.num_inputs - weight_num + addition_num)
+            else:
+                raise RuntimeError("Error layer number!")
 
             genome.connections[(in_node, out_node)].weight = \
                 (layer[layer_num].weight.data[weight_tensor_num])[weight_num].item()
