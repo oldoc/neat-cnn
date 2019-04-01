@@ -19,6 +19,19 @@ import torch.nn.functional as F
 import neat.genome
 import numpy as np
 
+shuffle = True
+
+class ShuffleBlock(nn.Module):
+    def __init__(self, groups):
+        super(ShuffleBlock, self).__init__()
+        self.groups = groups
+
+    def forward(self, x):
+        '''Channel shuffle: [N,C,H,W] -> [N,g,C/g,H,W] -> [N,C/g,g,H,w] -> [N,C,H,W]'''
+        N,C,H,W = x.size()
+        g = self.groups
+        return x.view(N,g,C//g,H,W).permute(0,2,1,3,4).contiguous().view(N,C,H,W)
+
 class cnn_block(nn.Module):
 
     layerout = list()
@@ -29,9 +42,9 @@ class cnn_block(nn.Module):
     def __init__(self, downsampling_time, num_dense_layer, in_planes, out_planes, stride=1):
         super(cnn_block, self).__init__()
 
-        groupcov = True
+        global shuffle
 
-        if groupcov:
+        if shuffle:
             g = in_planes // out_planes
 
             if g == 0:
@@ -39,12 +52,23 @@ class cnn_block(nn.Module):
         else:
             g = 1
 
-        self.bn1 = nn.BatchNorm2d(in_planes)
-        self.conv1 = nn.Conv2d(in_planes, g * out_planes, kernel_size=1, stride=1, padding=0, bias=True)
-        self.bn2 = nn.BatchNorm2d(g * out_planes)
-        self.conv2 = nn.Conv2d(g * out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
-        self.num_dense_layer = num_dense_layer
-        self.downsampling_time = downsampling_time
+        if shuffle:
+            self.bn1 = nn.BatchNorm2d(in_planes)
+            self.conv1 = nn.Conv2d(in_planes, g*out_planes, kernel_size=1, stride=1, padding=0, bias=True)
+            self.bn2 = nn.BatchNorm2d(g*out_planes)
+            self.conv2 = nn.Conv2d(g*out_planes, g*out_planes, kernel_size=3, stride=stride, padding=1, groups=g, bias=True)
+            self.shuffle = ShuffleBlock(groups=g)
+            self.bn3 = nn.BatchNorm2d(g*out_planes)
+            self.conv3 = nn.Conv2d(g*out_planes, out_planes, kernel_size=1, stride=1, padding=0, groups=out_planes, bias=True)
+            self.num_dense_layer = num_dense_layer
+            self.downsampling_time = downsampling_time
+        else:
+            self.bn1 = nn.BatchNorm2d(in_planes)
+            self.conv1 = nn.Conv2d(in_planes, g * out_planes, kernel_size=1, stride=1, padding=0, bias=True)
+            self.bn2 = nn.BatchNorm2d(g * out_planes)
+            self.conv2 = nn.Conv2d(g * out_planes, out_planes, kernel_size=3, stride=stride, padding=1, groups=out_planes, bias=True)
+            self.num_dense_layer = num_dense_layer
+            self.downsampling_time = downsampling_time
 
         #self.dropout = nn.Dropout2d(p=0.1)
 
@@ -59,6 +83,7 @@ class cnn_block(nn.Module):
 
             out = self.conv1(F.relu(self.bn1(x)))
             out = self.conv2(F.relu(self.bn2(out)))
+            out = self.conv3(F.relu(self.bn3(out)))
 
             self.layerout.append(x)
             self.layerout.append(out)
@@ -98,8 +123,14 @@ class cnn_block(nn.Module):
                 for i in range(1, self.num_dense_layer):
                     input = torch.cat([input, former_layers[i]], 1)
 
-            out = self.conv1(F.relu(self.bn1(input)))
-            out = self.conv2(F.relu(self.bn2(out)))
+            if shuffle:
+                out = self.conv1(F.relu(self.bn1(input)))
+                out = self.conv2(F.relu(self.bn2(out)))
+                out = self.shuffle(out)
+                out = self.conv3(F.relu(self.bn3(out)))
+            else:
+                out = self.conv1(F.relu(self.bn1(input)))
+                out = self.conv2(F.relu(self.bn2(out)))
 
             self.layerout.append(out)
 
@@ -314,17 +345,18 @@ class Net(nn.Module):
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
 
-            # Added when using dense conncetion
-            addition_num = 0
-            for i in range(s+1, c):
-                addition_num += self.nodes_every_layers[i]
+            if c <= self.num_cnn_layer: #if not the layers after the first fc layer
+                # Added when using dense conncetion
+                addition_num = 0
+                for i in range(s+1, c):
+                    addition_num += self.nodes_every_layers[i]
 
-            if s >= 0:
-                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
-            elif s == -1:
-                weight_num = -(self.num_inputs - weight_num + addition_num)
-            else:
-                raise RuntimeError("Error layer number!")
+                if s >= 0:
+                    weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+                elif s == -1:
+                    weight_num = -(self.num_inputs - weight_num + addition_num)
+                else:
+                    raise RuntimeError("Error layer number!")
 
             (layer[layer_num].weight.data[weight_tensor_num])[weight_num] = \
                 torch.FloatTensor([genome.connections[(in_node, out_node)].weight])
@@ -387,17 +419,18 @@ class Net(nn.Module):
             weight_tensor_num = nodes[out_node][1]
             weight_num = nodes[in_node][1]
 
-            # Added when using dense conncetion
-            addition_num = 0
-            for i in range(s+1, c):
-                addition_num += self.nodes_every_layers[i]
+            if c <= self.num_cnn_layer:  # if not the layers after the first fc layer
+                # Added when using dense conncetion
+                addition_num = 0
+                for i in range(s+1, c):
+                    addition_num += self.nodes_every_layers[i]
 
-            if s >= 0:
-                weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
-            elif s == -1:
-                weight_num = -(self.num_inputs - weight_num + addition_num)
-            else:
-                raise RuntimeError("Error layer number!")
+                if s >= 0:
+                    weight_num = -(self.nodes_every_layers[s] - weight_num + addition_num)
+                elif s == -1:
+                    weight_num = -(self.num_inputs - weight_num + addition_num)
+                else:
+                    raise RuntimeError("Error layer number!")
 
             genome.connections[(in_node, out_node)].weight = \
                 (layer[layer_num].weight.data[weight_tensor_num])[weight_num].item()
